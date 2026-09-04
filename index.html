@@ -920,7 +920,7 @@
 </div>
 
 <script>
-const APP_VERSION = '1.9';
+const APP_VERSION = '2.0';
 const APP_BUILD_DATE = '04.09.26';
 const TX_KEY = 'flip-transactions-v3';
 const OLD_TX_KEY = 'flip-transactions-v2';
@@ -4236,6 +4236,71 @@ async function applyDump(data) {
 }
 
 /* ---------- data file (works even when browser storage is unreliable) ---------- */
+
+/* ---------- cloud controls ---------- */
+function openSpaceDialog(firstRun) {
+  const f = openModal(firstRun ? 'Ключ пространства' : 'Смена ключа пространства', `
+    <div class="hint" style="margin-bottom:10px;">
+      Ключ определяет, чьи данные вы видите. Введите один и тот же ключ на компьютере и телефоне —
+      и увидите одни и те же сделки. У другого человека со своим ключом будут свои данные.
+      <br><br>Придумайте что-то своё и не короткое — так, чтобы нельзя было угадать. Ключ хранится только на этом устройстве.
+    </div>
+    <label>Ключ пространства</label>
+    <input type="text" class="sp-key" autocomplete="off" spellcheck="false" value="${escapeHtml(cloudSpace)}">
+    <div class="error sp-err"></div>
+    <div class="btn-row" style="margin-top:10px;">
+      <button type="button" class="sp-save">${firstRun ? 'Продолжить' : 'Сохранить'}</button>
+      ${firstRun ? '' : '<button type="button" class="secondary sp-cancel">Отмена</button>'}
+    </div>`);
+
+  const input = f.querySelector('.sp-key');
+  input.focus();
+  const cancel = f.querySelector('.sp-cancel');
+  if (cancel) cancel.addEventListener('click', closeModal);
+
+  const save = async () => {
+    const v = input.value.trim().toLowerCase().replace(/\s+/g, '-');
+    const err = f.querySelector('.sp-err');
+    if (v.length < 4) { err.textContent = 'Слишком короткий — минимум 4 символа'; err.style.display = 'block'; return; }
+    err.style.display = 'none';
+    const changed = v !== cloudSpace;
+    saveSpace(v);
+    closeModal();
+    renderCloudStatus();
+    await pullFromCloud(!changed);
+  };
+  f.querySelector('.sp-save').addEventListener('click', save);
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') save(); });
+}
+
+$('btn-space').addEventListener('click', () => openSpaceDialog(false));
+
+$('cloud-toggle').addEventListener('change', async () => {
+  cloudOn = $('cloud-toggle').checked;
+  try { localStorage.setItem('flip-cloud-on', cloudOn ? '1' : '0'); } catch (e) {}
+  renderCloudStatus();
+  if (cloudOn && !cloudSpace) { openSpaceDialog(true); return; }
+  if (cloudOn) await pullFromCloud();
+});
+
+$('btn-cloud-push').addEventListener('click', async () => {
+  if (!cloudSpace) { openSpaceDialog(true); return; }
+  if (!transactions.length && !products.length && !assets.length) {
+    showBanner('Здесь нет данных — отправлять нечего. Если данные должны быть, нажмите «Загрузить из облака».');
+    return;
+  }
+  SYNCED_KEYS.forEach(k => cloudPending.add(k));
+  await flushCloud();
+  if (cloudState === 'ok') showBanner('Данные отправлены в облако.', true);
+});
+
+$('btn-cloud-pull').addEventListener('click', async () => {
+  if (!cloudSpace) { openSpaceDialog(true); return; }
+  if (transactions.length || products.length || assets.length) {
+    if (!confirm('Заменить данные на этом устройстве тем, что лежит в облаке?')) return;
+  }
+  await pullFromCloud();
+});
 
 /* ---------- backup ---------- */
 function collectImages() {
