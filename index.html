@@ -896,7 +896,7 @@
 </div>
 
 <script>
-const APP_VERSION = '1.5';
+const APP_VERSION = '1.6';
 const APP_BUILD_DATE = '04.09.26';
 const TX_KEY = 'flip-transactions-v3';
 const OLD_TX_KEY = 'flip-transactions-v2';
@@ -1143,7 +1143,15 @@ function cloudHeaders() {
     'apikey': CLOUD_KEY,
     'Authorization': 'Bearer ' + CLOUD_KEY,
     'Content-Type': 'application/json',
+    'x-space': cloudSpace,
     'Prefer': 'resolution=merge-duplicates'
+  };
+}
+function cloudReadHeaders() {
+  return {
+    apikey: CLOUD_KEY,
+    Authorization: 'Bearer ' + CLOUD_KEY,
+    'x-space': cloudSpace
   };
 }
 
@@ -1158,7 +1166,7 @@ async function cloudPush(key, value) {
 async function cloudPullAll() {
   const res = await fetch(
     `${CLOUD_URL}/rest/v1/${CLOUD_TABLE}?space=eq.${encodeURIComponent(cloudSpace)}&select=key,value,updated_at`,
-    { headers: { apikey: CLOUD_KEY, Authorization: 'Bearer ' + CLOUD_KEY } });
+    { headers: cloudReadHeaders() });
   if (!res.ok) throw new Error('HTTP ' + res.status);
   const rows = await res.json();
   const map = {};
@@ -1210,7 +1218,7 @@ async function wouldWipe(key, value) {
   try {
     const res = await fetch(
       `${CLOUD_URL}/rest/v1/${CLOUD_TABLE}?space=eq.${encodeURIComponent(cloudSpace)}&key=eq.${encodeURIComponent(key)}&select=value`,
-      { headers: { apikey: CLOUD_KEY, Authorization: 'Bearer ' + CLOUD_KEY } });
+      { headers: cloudReadHeaders() });
     if (!res.ok) return false;
     const rows = await res.json();
     if (!rows.length) return false;
