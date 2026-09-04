@@ -768,6 +768,9 @@
       <input type="checkbox" id="cloud-toggle" checked>
       <label for="cloud-toggle">Включить синхронизацию</label>
     </div>
+    <div class="btn-row" style="margin-bottom:8px;">
+      <button type="button" class="secondary" id="btn-space">Ввести ключ пространства</button>
+    </div>
     <div class="btn-row">
       <button type="button" class="secondary" id="btn-cloud-push">Отправить в облако</button>
       <button type="button" class="secondary" id="btn-cloud-pull">Загрузить из облака</button>
@@ -893,7 +896,7 @@
 </div>
 
 <script>
-const APP_VERSION = '1.4';
+const APP_VERSION = '1.5';
 const APP_BUILD_DATE = '04.09.26';
 const TX_KEY = 'flip-transactions-v3';
 const OLD_TX_KEY = 'flip-transactions-v2';
@@ -1113,6 +1116,16 @@ async function loadAll() {
 const CLOUD_URL = 'https://ssrqhyibayborcxvxpzt.supabase.co';
 const CLOUD_KEY = 'sb_publishable_DXS3jRv4nEUiV1m5PFUgZw_uORTdyQ6';
 const CLOUD_TABLE = 'app_data';
+const SPACE_KEY = 'flip-space';
+let cloudSpace = '';
+function loadSpace() {
+  try { cloudSpace = localStorage.getItem(SPACE_KEY) || ''; } catch (e) { cloudSpace = ''; }
+  return cloudSpace;
+}
+function saveSpace(v) {
+  cloudSpace = v;
+  try { localStorage.setItem(SPACE_KEY, v); } catch (e) {}
+}
 const DEVICE_KEY = 'flip-device-id';
 const SYNCED_KEYS = ['flip-transactions-v3', 'flip-products', 'flip-assets',
                      'flip-profile-names', 'flip-cat-colors', 'flip-action-colors',
@@ -1135,7 +1148,7 @@ function cloudHeaders() {
 }
 
 async function cloudPush(key, value) {
-  const body = JSON.stringify([{ key, value, updated_at: new Date().toISOString() }]);
+  const body = JSON.stringify([{ space: cloudSpace, key, value, updated_at: new Date().toISOString() }]);
   const res = await fetch(`${CLOUD_URL}/rest/v1/${CLOUD_TABLE}`, {
     method: 'POST', headers: cloudHeaders(), body
   });
@@ -1144,7 +1157,7 @@ async function cloudPush(key, value) {
 
 async function cloudPullAll() {
   const res = await fetch(
-    `${CLOUD_URL}/rest/v1/${CLOUD_TABLE}?select=key,value,updated_at`,
+    `${CLOUD_URL}/rest/v1/${CLOUD_TABLE}?space=eq.${encodeURIComponent(cloudSpace)}&select=key,value,updated_at`,
     { headers: { apikey: CLOUD_KEY, Authorization: 'Bearer ' + CLOUD_KEY } });
   if (!res.ok) throw new Error('HTTP ' + res.status);
   const rows = await res.json();
@@ -1178,7 +1191,7 @@ function cloudApply(key, value) {
 }
 
 function markCloudDirty(key) {
-  if (!cloudOn || !SYNCED_KEYS.includes(key)) return;
+  if (!cloudOn || !cloudSpace || !SYNCED_KEYS.includes(key)) return;
   cloudPending.add(key);
   clearTimeout(cloudTimer);
   cloudTimer = setTimeout(flushCloud, 1200);
@@ -1196,7 +1209,7 @@ async function wouldWipe(key, value) {
   if (!isEmptyPayload(key, value)) return false;
   try {
     const res = await fetch(
-      `${CLOUD_URL}/rest/v1/${CLOUD_TABLE}?key=eq.${encodeURIComponent(key)}&select=value`,
+      `${CLOUD_URL}/rest/v1/${CLOUD_TABLE}?space=eq.${encodeURIComponent(cloudSpace)}&key=eq.${encodeURIComponent(key)}&select=value`,
       { headers: { apikey: CLOUD_KEY, Authorization: 'Bearer ' + CLOUD_KEY } });
     if (!res.ok) return false;
     const rows = await res.json();
@@ -1206,7 +1219,7 @@ async function wouldWipe(key, value) {
 }
 
 async function flushCloud() {
-  if (!cloudOn || !cloudPending.size) return;
+  if (!cloudOn || !cloudSpace || !cloudPending.size) return;
   const keys = [...cloudPending];
   cloudPending.clear();
   cloudState = 'syncing';
@@ -1237,7 +1250,7 @@ async function flushCloud() {
 }
 
 async function pullFromCloud(silent) {
-  if (!cloudOn) return;
+  if (!cloudOn || !cloudSpace) return;
   cloudState = 'syncing';
   renderCloudStatus();
   try {
@@ -1285,7 +1298,10 @@ function renderCloudStatus() {
     : cloudState === 'error' ? 'ошибка: ' + escapeHtml(cloudMsg)
     : cloudMsg || 'готово';
   el.innerHTML = `Облако: <span class="${cloudState === 'error' ? 'bad' : cloudState === 'ok' ? 'ok' : ''}">${label}</span>` +
+    (cloudSpace ? ` · пространство: <b>${escapeHtml(cloudSpace)}</b>` : ' · ключ не задан') +
     (cloudPending.size ? ` · ждут отправки: ${cloudPending.size}` : '');
+  const btn = $('btn-space');
+  if (btn) btn.textContent = cloudSpace ? 'Сменить ключ пространства' : 'Ввести ключ пространства';
   const dot = $('cloud-dot');
   if (dot) {
     dot.style.background = !cloudOn ? 'var(--muted)'
@@ -4333,6 +4349,7 @@ $('cloud-toggle').addEventListener('change', async () => {
   if (cloudOn) await pullFromCloud();
 });
 $('btn-cloud-push').addEventListener('click', async () => {
+  if (!cloudSpace) { openSpaceDialog(true); return; }
   if (!transactions.length && !products.length && !assets.length) {
     showBanner('Здесь нет данных — отправлять нечего. Если данные должны быть, нажмите «Загрузить из облака».');
     return;
@@ -4341,6 +4358,43 @@ $('btn-cloud-push').addEventListener('click', async () => {
   await flushCloud();
   if (cloudState === 'ok') showBanner('Данные отправлены в облако.', true);
 });
+function openSpaceDialog(firstRun) {
+  const f = openModal(firstRun ? 'Ключ пространства' : 'Смена ключа пространства', `
+    <div class="hint" style="margin-bottom:10px;">
+      Ключ определяет, чьи данные вы видите. Введите один и тот же ключ на компьютере и телефоне —
+      и увидите одни и те же сделки. У другого человека со своим ключом будут свои данные.
+      <br><br>Придумайте что-то своё и не короткое, например <b>denys-7k2mq9</b>. Ключ хранится только на этом устройстве.
+    </div>
+    <label>Ключ пространства</label>
+    <input type="text" class="sp-key" autocomplete="off" spellcheck="false" value="${escapeHtml(cloudSpace)}" placeholder="denys-7k2mq9">
+    <div class="error sp-err"></div>
+    <div class="btn-row" style="margin-top:10px;">
+      <button type="button" class="sp-save">${firstRun ? 'Продолжить' : 'Сохранить'}</button>
+      ${firstRun ? '' : '<button type="button" class="secondary sp-cancel">Отмена</button>'}
+    </div>`);
+
+  const input = f.querySelector('.sp-key');
+  input.focus();
+  const cancel = f.querySelector('.sp-cancel');
+  if (cancel) cancel.addEventListener('click', closeModal);
+
+  const save = async () => {
+    const v = input.value.trim().toLowerCase().replace(/\s+/g, '-');
+    const err = f.querySelector('.sp-err');
+    if (v.length < 4) { err.textContent = 'Слишком короткий — минимум 4 символа'; err.style.display = 'block'; return; }
+    err.style.display = 'none';
+    const changed = v !== cloudSpace;
+    saveSpace(v);
+    closeModal();
+    renderCloudStatus();
+    if (changed) await pullFromCloud();
+    else await pullFromCloud(true);
+  };
+  f.querySelector('.sp-save').addEventListener('click', save);
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') save(); });
+}
+$('btn-space').addEventListener('click', () => openSpaceDialog(false));
+
 $('btn-cloud-pull').addEventListener('click', async () => {
   if (transactions.length || products.length || assets.length) {
     if (!confirm('Заменить данные на этом устройстве тем, что лежит в облаке?')) return;
@@ -4432,6 +4486,10 @@ $('app-version').title = 'Сборка от ' + APP_BUILD_DATE;
   checkEmptyWithMirror();
   await reconcileStores();
 
+  loadSpace();
+  if (cloudOn && !cloudSpace) {
+    openSpaceDialog(true);
+  }
   if (cloudOn) {
     await pullFromCloud(true);
     /* first run on a fresh device: seed the cloud with whatever is here */
