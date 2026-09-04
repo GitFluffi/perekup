@@ -304,6 +304,20 @@
   .diag-out .ok { color: var(--green); }
   .diag-out .bad { color: var(--red); }
   .diag-out .warn { color: var(--gold); }
+  .sect { padding: 0; }
+  .sect-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    width: 100%; background: none; border: none; padding: 14px; cursor: pointer;
+    color: var(--text); font-size: 13.5px; font-weight: 600; text-align: left;
+  }
+  .sect-head:hover { background: var(--panel-2); color: var(--gold); }
+  .sect-arrow { color: var(--muted); font-size: 11px; }
+  .sect-body { padding: 0 14px 14px; }
+  .space-mask {
+    cursor: pointer; user-select: none; letter-spacing: 1px;
+    border-bottom: 1px dashed var(--line); padding-bottom: 1px;
+  }
+  .space-mask:hover { border-bottom-color: var(--gold); }
   .cloud-dot {
     display: inline-block; width: 8px; height: 8px; border-radius: 50%;
     background: var(--muted); margin-left: 6px; vertical-align: middle;
@@ -722,45 +736,74 @@
 
 <!-- ===================== SETTINGS ===================== -->
 <div class="view" id="view-settings">
-  <form onsubmit="return false;">
-    <div class="form-title">Оформление</div>
+  <form onsubmit="return false;" class="sect">
+    <button type="button" class="sect-head" data-sect="sec1">
+      <span>Оформление</span><span class="sect-arrow">▾</span>
+    </button>
+    <div class="sect-body hidden" id="sec1">
+    
     <div class="theme-grid" id="theme-list"></div>
+  </div>
   </form>
 
-  <form onsubmit="return false;">
-    <div class="form-title">Категория по умолчанию для профиля</div>
+  <form onsubmit="return false;" class="sect">
+    <button type="button" class="sect-head" data-sect="sec2">
+      <span>Категория по умолчанию для профиля</span><span class="sect-arrow">▾</span>
+    </button>
+    <div class="sect-body hidden" id="sec2">
+    
     <div id="profcat-list"></div>
     <div class="hint" style="margin-top:8px;">При переключении на профиль и после каждой сделки эта категория подставится в форму автоматически.</div>
+  </div>
   </form>
 
-  <form onsubmit="return false;">
-    <div class="form-title">Цвета типов сделок</div>
+  <form onsubmit="return false;" class="sect">
+    <button type="button" class="sect-head" data-sect="sec3">
+      <span>Цвета типов сделок</span><span class="sect-arrow">▾</span>
+    </button>
+    <div class="sect-body hidden" id="sec3">
+    
     <div id="action-color-list"></div>
     <div class="btn-row" style="margin-top:12px;">
       <button type="button" class="secondary" id="action-colors-reset">Вернуть стандартные</button>
     </div>
+  </div>
   </form>
 
-  <form onsubmit="return false;">
-    <div class="form-title">Цвета категорий</div>
+  <form onsubmit="return false;" class="sect">
+    <button type="button" class="sect-head" data-sect="sec4">
+      <span>Цвета категорий</span><span class="sect-arrow">▾</span>
+    </button>
+    <div class="sect-body hidden" id="sec4">
+    
     <div id="color-list"></div>
     <div class="btn-row" style="margin-top:12px;">
       <button type="button" class="secondary" id="colors-reset">Вернуть стандартные цвета</button>
     </div>
+  </div>
   </form>
 
-  <form onsubmit="return false;">
-    <div class="form-title">Данные</div>
+  <form onsubmit="return false;" class="sect">
+    <button type="button" class="sect-head" data-sect="sec5">
+      <span>Данные</span><span class="sect-arrow">▾</span>
+    </button>
+    <div class="sect-body hidden" id="sec5">
+    
     <div class="btn-row">
       <button type="button" class="secondary" id="btn-export">Скачать резервную копию</button>
       <button type="button" class="secondary" id="btn-import">Загрузить копию</button>
     </div>
     <input type="file" accept="application/json" id="import-file" class="hidden">
     <div class="hint" id="store-info" style="margin-top:8px;"></div>
+  </div>
   </form>
 
-  <form onsubmit="return false;">
-    <div class="form-title">Синхронизация между устройствами</div>
+  <form onsubmit="return false;" class="sect">
+    <button type="button" class="sect-head" data-sect="sec6">
+      <span>Синхронизация между устройствами</span><span class="sect-arrow">▾</span>
+    </button>
+    <div class="sect-body hidden" id="sec6">
+    
     <div class="hint" style="margin-bottom:10px;">
       Сделки, товары и имущество хранятся в общей базе — открывайте программу с любого устройства и видите одно и то же.
     </div>
@@ -776,29 +819,10 @@
       <button type="button" class="secondary" id="btn-cloud-pull">Загрузить из облака</button>
     </div>
     <div class="diag-out" id="cloud-status" style="margin-top:8px;"></div>
+  </div>
   </form>
 
-  <form onsubmit="return false;">
-    <div class="form-title">Файл данных</div>
-    <div class="hint" id="datafile-hint" style="margin-bottom:10px;"></div>
-    <div class="btn-row">
-      <button type="button" class="secondary" id="btn-openfile">Открыть файл данных</button>
-      <button type="button" class="secondary" id="btn-newfile">Создать файл данных</button>
-    </div>
-    <div class="btn-row" style="margin-top:8px;">
-      <button type="button" class="secondary hidden" id="btn-detachfile">Отключить файл</button>
-    </div>
-    <div class="hint" id="datafile-status" style="margin-top:8px;"></div>
-  </form>
 
-  <form onsubmit="return false;">
-    <div class="form-title">Проверка хранилища</div>
-    <div class="hint" style="margin-bottom:10px;">
-      Запишет пробное значение, прочитает обратно и покажет, какое хранилище работает.
-    </div>
-    <button type="button" class="secondary" id="btn-diag">Проверить</button>
-    <div class="diag-out" id="diag-out"></div>
-  </form>
 
 </div>
 
@@ -896,7 +920,7 @@
 </div>
 
 <script>
-const APP_VERSION = '1.5';
+const APP_VERSION = '1.8';
 const APP_BUILD_DATE = '04.09.26';
 const TX_KEY = 'flip-transactions-v3';
 const OLD_TX_KEY = 'flip-transactions-v2';
@@ -1143,7 +1167,15 @@ function cloudHeaders() {
     'apikey': CLOUD_KEY,
     'Authorization': 'Bearer ' + CLOUD_KEY,
     'Content-Type': 'application/json',
+    'x-space': cloudSpace,
     'Prefer': 'resolution=merge-duplicates'
+  };
+}
+function cloudReadHeaders() {
+  return {
+    apikey: CLOUD_KEY,
+    Authorization: 'Bearer ' + CLOUD_KEY,
+    'x-space': cloudSpace
   };
 }
 
@@ -1158,7 +1190,7 @@ async function cloudPush(key, value) {
 async function cloudPullAll() {
   const res = await fetch(
     `${CLOUD_URL}/rest/v1/${CLOUD_TABLE}?space=eq.${encodeURIComponent(cloudSpace)}&select=key,value,updated_at`,
-    { headers: { apikey: CLOUD_KEY, Authorization: 'Bearer ' + CLOUD_KEY } });
+    { headers: cloudReadHeaders() });
   if (!res.ok) throw new Error('HTTP ' + res.status);
   const rows = await res.json();
   const map = {};
@@ -1210,7 +1242,7 @@ async function wouldWipe(key, value) {
   try {
     const res = await fetch(
       `${CLOUD_URL}/rest/v1/${CLOUD_TABLE}?space=eq.${encodeURIComponent(cloudSpace)}&key=eq.${encodeURIComponent(key)}&select=value`,
-      { headers: { apikey: CLOUD_KEY, Authorization: 'Bearer ' + CLOUD_KEY } });
+      { headers: cloudReadHeaders() });
     if (!res.ok) return false;
     const rows = await res.json();
     if (!rows.length) return false;
@@ -1298,10 +1330,21 @@ function renderCloudStatus() {
     : cloudState === 'error' ? 'ошибка: ' + escapeHtml(cloudMsg)
     : cloudMsg || 'готово';
   el.innerHTML = `Облако: <span class="${cloudState === 'error' ? 'bad' : cloudState === 'ok' ? 'ok' : ''}">${label}</span>` +
-    (cloudSpace ? ` · пространство: <b>${escapeHtml(cloudSpace)}</b>` : ' · ключ не задан') +
+    (cloudSpace
+      ? ` · пространство: <b class="space-mask" id="space-mask" title="Нажмите и удерживайте, чтобы показать">${'•'.repeat(Math.min(cloudSpace.length, 12))}</b>`
+      : ' · ключ не задан') +
     (cloudPending.size ? ` · ждут отправки: ${cloudPending.size}` : '');
   const btn = $('btn-space');
   if (btn) btn.textContent = cloudSpace ? 'Сменить ключ пространства' : 'Ввести ключ пространства';
+
+  const mask = $('space-mask');
+  if (mask) {
+    const show = () => { mask.textContent = cloudSpace; };
+    const hide = () => { mask.textContent = '•'.repeat(Math.min(cloudSpace.length, 12)); };
+    mask.addEventListener('mousedown', show);
+    mask.addEventListener('touchstart', e => { e.preventDefault(); show(); }, { passive: false });
+    ['mouseup', 'mouseleave', 'touchend', 'touchcancel'].forEach(ev => mask.addEventListener(ev, hide));
+  }
   const dot = $('cloud-dot');
   if (dot) {
     dot.style.background = !cloudOn ? 'var(--muted)'
@@ -1470,7 +1513,6 @@ async function saveTx(fromCloud) {
   invalidateTx();
   const r = await safeSet(TX_KEY, transactions, 'сделки');
   if (!fromCloud) markCloudDirty(TX_KEY);
-  if (typeof markFileDirty === 'function') markFileDirty();
   if (typeof updateStoreInfo === 'function') updateStoreInfo();
   return r;
 }
@@ -1545,7 +1587,6 @@ async function saveProducts(fromCloud) {
   imageIndex = null;
   const r = await safeSet(PROD_KEY, products, 'каталог товаров');
   if (!fromCloud) markCloudDirty(PROD_KEY);
-  if (typeof markFileDirty === 'function') markFileDirty();
   return r;
 }
 
@@ -2949,7 +2990,7 @@ function renderAll() {
   else if (v === 'stats') { renderItemStats(); renderDays(); }
   else if (v === 'products') { if (typeof renderProducts === 'function') renderProducts(); }
   else if (v === 'assets') { if (typeof renderAssets === 'function') renderAssets(); }
-  else if (v === 'settings') { if (typeof renderCloudStatus === 'function') renderCloudStatus(); if (typeof renderDataFileSettings === 'function') renderDataFileSettings(); renderThemeSettings(); renderProfileCategorySettings(); renderActionColorSettings(); renderColorSettings(); if (typeof updateStoreInfo === 'function') updateStoreInfo(); }
+  else if (v === 'settings') { initSettingsSections(); if (typeof renderCloudStatus === 'function') renderCloudStatus(); renderThemeSettings(); renderProfileCategorySettings(); renderActionColorSettings(); renderColorSettings(); if (typeof updateStoreInfo === 'function') updateStoreInfo(); }
 }
 
 /* ---------- products tab ---------- */
@@ -3716,7 +3757,6 @@ async function loadAssets() {
 async function saveAssets(fromCloud) {
   const r = await safeSet(ASSET_KEY, assets, 'имущество');
   if (!fromCloud) markCloudDirty(ASSET_KEY);
-  if (typeof markFileDirty === 'function') markFileDirty();
   return r;
 }
 async function saveProfileNames() { markCloudDirty(PROFILE_NAMES_KEY); return safeSet(PROFILE_NAMES_KEY, profileNames, 'названия профилей'); }
@@ -4105,6 +4145,18 @@ $('action-colors-reset').addEventListener('click', async () => {
 });
 
 /* ---------- settings: colors ---------- */
+function initSettingsSections() {
+  document.querySelectorAll('.sect-head').forEach(head => {
+    if (head.dataset.wired) return;
+    head.dataset.wired = '1';
+    head.addEventListener('click', () => {
+      const body = $(head.dataset.sect);
+      const opened = body.classList.toggle('hidden') === false;
+      head.querySelector('.sect-arrow').textContent = opened ? '▴' : '▾';
+    });
+  });
+}
+
 function renderColorSettings() {
   const box = $('color-list');
   if (!box) return;
@@ -4184,223 +4236,6 @@ async function applyDump(data) {
 }
 
 /* ---------- data file (works even when browser storage is unreliable) ---------- */
-const isFileUrl = location.protocol === 'file:';
-const canPickFiles = 'showOpenFilePicker' in window;
-let dataFile = null;          // FileSystemFileHandle
-let fileSaveTimer = null;
-let fileSaveState = '';
-
-function markFileDirty() {
-  if (!dataFile) return;
-  clearTimeout(fileSaveTimer);
-  fileSaveTimer = setTimeout(flushDataFile, 800);
-}
-
-async function flushDataFile() {
-  if (!dataFile) return;
-  try {
-    const perm = await dataFile.queryPermission({ mode: 'readwrite' });
-    if (perm !== 'granted' && (await dataFile.requestPermission({ mode: 'readwrite' })) !== 'granted') {
-      fileSaveState = 'нет разрешения на запись';
-      renderDataFileSettings();
-      return;
-    }
-    const w = await dataFile.createWritable();
-    await w.write(JSON.stringify(buildDump()));
-    await w.close();
-    fileSaveState = 'сохранено ' + new Date().toLocaleTimeString('ru-RU').slice(0, 5);
-  } catch (e) {
-    fileSaveState = 'ошибка записи: ' + (e.message || e);
-  }
-  renderDataFileSettings();
-}
-
-async function attachDataFile(handle, load) {
-  dataFile = handle;
-  if (load) {
-    try {
-      const file = await handle.getFile();
-      const text = await file.text();
-      if (text.trim()) {
-        await applyDump(JSON.parse(text));
-        showBanner('Данные загружены из файла.', true);
-      }
-    } catch (e) {
-      showBanner('Не удалось прочитать файл данных: ' + escapeHtml(String(e.message || e)));
-      dataFile = null;
-      renderDataFileSettings();
-      return;
-    }
-  }
-  await flushDataFile();
-  renderDataFileSettings();
-}
-
-function renderDataFileSettings() {
-  const hint = $('datafile-hint');
-  const status = $('datafile-status');
-  if (!hint) return;
-
-  if (!canPickFiles) {
-    hint.textContent = 'Этот браузер не умеет писать в файл напрямую. Работает в Chrome и Edge на компьютере.';
-    $('btn-openfile').classList.add('hidden');
-    $('btn-newfile').classList.add('hidden');
-    return;
-  }
-
-  hint.innerHTML = isFileUrl
-    ? 'Программа открыта как файл с диска, и браузер в этом режиме может терять своё хранилище между открытиями. ' +
-      'Надёжный способ — держать данные в отдельном файле: выберите его один раз за сеанс, дальше всё пишется туда автоматически.'
-    : 'Можно держать данные в отдельном файле на диске — он будет обновляться автоматически при каждом изменении.';
-
-  status.textContent = dataFile
-    ? `Файл: ${dataFile.name}${fileSaveState ? ' · ' + fileSaveState : ''}`
-    : 'Файл не выбран — данные хранятся только в браузере.';
-
-  $('btn-detachfile').classList.toggle('hidden', !dataFile);
-}
-
-$('btn-openfile').addEventListener('click', async () => {
-  try {
-    const [handle] = await window.showOpenFilePicker({
-      types: [{ description: 'Данные калькулятора', accept: { 'application/json': ['.json'] } }]
-    });
-    await attachDataFile(handle, true);
-  } catch (e) { /* cancelled */ }
-});
-
-$('btn-newfile').addEventListener('click', async () => {
-  try {
-    const handle = await window.showSaveFilePicker({
-      suggestedName: 'perekup-data.json',
-      types: [{ description: 'Данные калькулятора', accept: { 'application/json': ['.json'] } }]
-    });
-    await attachDataFile(handle, false);
-    showBanner('Файл создан — данные пишутся в него автоматически.', true);
-  } catch (e) { /* cancelled */ }
-});
-
-$('btn-detachfile').addEventListener('click', () => {
-  dataFile = null;
-  fileSaveState = '';
-  renderDataFileSettings();
-});
-
-window.addEventListener('beforeunload', () => { if (dataFile) flushDataFile(); });
-
-/* ---------- storage diagnostics ---------- */
-async function runDiagnostics() {
-  const out = $('diag-out');
-  out.innerHTML = 'Проверяю…';
-  const lines = [];
-  const probeKey = 'flip-probe';
-  const probeVal = 'probe-' + Date.now();
-
-  // 1. main store write + read back
-  let mainWrite = false, mainRead = false;
-  try {
-    await Store.set(probeKey, probeVal, false);
-    mainWrite = true;
-  } catch (e) { lines.push(`<span class="bad">Основное хранилище: запись не прошла (${escapeHtml(String(e.message || e))})</span>`); }
-  try {
-    const r = await Store.get(probeKey, false);
-    mainRead = !!(r && r.value === probeVal);
-  } catch (e) {}
-  if (mainWrite || mainRead) {
-    lines.push(mainRead
-      ? '<span class="ok">Основное хранилище: запись и чтение работают</span>'
-      : '<span class="bad">Основное хранилище: записало, но прочитать обратно не смогло</span>');
-  }
-
-  // 2. browser copy
-  let lsOk = false;
-  try {
-    localStorage.setItem('mirror:' + probeKey, probeVal);
-    lsOk = localStorage.getItem('mirror:' + probeKey) === probeVal;
-    localStorage.removeItem('mirror:' + probeKey);
-  } catch (e) {
-    lines.push(`<span class="bad">Копия в браузере: недоступна (${escapeHtml(String(e.message || e))})</span>`);
-  }
-  if (lsOk) lines.push('<span class="ok">Копия в браузере: работает</span>');
-
-  // 3. what is actually stored right now
-  let storedDeals = '—';
-  try {
-    const v = await readKey(TX_KEY);
-    storedDeals = v ? JSON.parse(v).length + ' шт.' : 'пусто';
-  } catch (e) { storedDeals = 'не читается'; }
-  lines.push(`Сейчас в хранилище сделок: <b>${storedDeals}</b>, на экране: <b>${transactions.length} шт.</b>`);
-
-  if (!mainRead && !lsOk) {
-    lines.push('<span class="bad">Данные не переживут обновление страницы.</span>');
-    lines.push('<span class="warn">Скачайте резервную копию и откройте файл программы с компьютера — там хранилище браузера обычно работает.</span>');
-  } else if (!mainRead && lsOk) {
-    lines.push('<span class="warn">Работает только копия в браузере — данные сохранятся, но лучше делать резервные копии.</span>');
-  }
-
-  out.innerHTML = lines.join('<br>');
-}
-$('btn-diag').addEventListener('click', runDiagnostics);
-
-$('cloud-toggle').addEventListener('change', async () => {
-  cloudOn = $('cloud-toggle').checked;
-  try { localStorage.setItem('flip-cloud-on', cloudOn ? '1' : '0'); } catch (e) {}
-  renderCloudStatus();
-  if (cloudOn) await pullFromCloud();
-});
-$('btn-cloud-push').addEventListener('click', async () => {
-  if (!cloudSpace) { openSpaceDialog(true); return; }
-  if (!transactions.length && !products.length && !assets.length) {
-    showBanner('Здесь нет данных — отправлять нечего. Если данные должны быть, нажмите «Загрузить из облака».');
-    return;
-  }
-  SYNCED_KEYS.forEach(k => cloudPending.add(k));
-  await flushCloud();
-  if (cloudState === 'ok') showBanner('Данные отправлены в облако.', true);
-});
-function openSpaceDialog(firstRun) {
-  const f = openModal(firstRun ? 'Ключ пространства' : 'Смена ключа пространства', `
-    <div class="hint" style="margin-bottom:10px;">
-      Ключ определяет, чьи данные вы видите. Введите один и тот же ключ на компьютере и телефоне —
-      и увидите одни и те же сделки. У другого человека со своим ключом будут свои данные.
-      <br><br>Придумайте что-то своё и не короткое, например <b>denys-7k2mq9</b>. Ключ хранится только на этом устройстве.
-    </div>
-    <label>Ключ пространства</label>
-    <input type="text" class="sp-key" autocomplete="off" spellcheck="false" value="${escapeHtml(cloudSpace)}" placeholder="denys-7k2mq9">
-    <div class="error sp-err"></div>
-    <div class="btn-row" style="margin-top:10px;">
-      <button type="button" class="sp-save">${firstRun ? 'Продолжить' : 'Сохранить'}</button>
-      ${firstRun ? '' : '<button type="button" class="secondary sp-cancel">Отмена</button>'}
-    </div>`);
-
-  const input = f.querySelector('.sp-key');
-  input.focus();
-  const cancel = f.querySelector('.sp-cancel');
-  if (cancel) cancel.addEventListener('click', closeModal);
-
-  const save = async () => {
-    const v = input.value.trim().toLowerCase().replace(/\s+/g, '-');
-    const err = f.querySelector('.sp-err');
-    if (v.length < 4) { err.textContent = 'Слишком короткий — минимум 4 символа'; err.style.display = 'block'; return; }
-    err.style.display = 'none';
-    const changed = v !== cloudSpace;
-    saveSpace(v);
-    closeModal();
-    renderCloudStatus();
-    if (changed) await pullFromCloud();
-    else await pullFromCloud(true);
-  };
-  f.querySelector('.sp-save').addEventListener('click', save);
-  input.addEventListener('keydown', e => { if (e.key === 'Enter') save(); });
-}
-$('btn-space').addEventListener('click', () => openSpaceDialog(false));
-
-$('btn-cloud-pull').addEventListener('click', async () => {
-  if (transactions.length || products.length || assets.length) {
-    if (!confirm('Заменить данные на этом устройстве тем, что лежит в облаке?')) return;
-  }
-  await pullFromCloud();
-});
 
 /* ---------- backup ---------- */
 function collectImages() {
@@ -4467,11 +4302,9 @@ function updateStoreInfo() {
   let imgKb = 0;
   imageCache.forEach(v => { imgKb += v.length; });
   $('store-info').textContent =
-    `Версия ${APP_VERSION} от ${APP_BUILD_DATE} · Хранилище: ${STORE_MODE === 'host' ? 'встроенное' : 'браузер (localStorage)'}` +
-    `${checkMirror() ? ' + копия в браузере' : ' (копия в браузере недоступна)'}` +
-    `${pendingSaves.size ? ' · ждут записи: ' + pendingSaves.size : ' · синхронно'} · ` +
-    `сделки ${size(transactions)} КБ · каталог ${size(products)} КБ · имущество ${size(assets)} КБ · ` +
-    `фото ${Math.round(imgKb / 1024)} КБ (${imageCache.size} шт.)`;
+    `Версия ${APP_VERSION} от ${APP_BUILD_DATE} · ` +
+    `сделки ${size(transactions)} КБ · каталог ${size(products)} КБ · ` +
+    `имущество ${size(assets)} КБ · фото ${Math.round(imgKb / 1024)} КБ (${imageCache.size} шт.)`;
 }
 
 $('app-version').textContent = 'v' + APP_VERSION;
@@ -4501,12 +4334,6 @@ $('app-version').title = 'Сборка от ' + APP_BUILD_DATE;
     window.addEventListener('beforeunload', () => { if (cloudPending.size) flushCloud(); });
   }
   renderCloudStatus();
-  if (isFileUrl && canPickFiles && !transactions.length && !products.length) {
-    showBanner(
-      'Программа открыта файлом с диска. В этом режиме браузер может не сохранять данные между открытиями — ' +
-      'в «Настройках» выберите файл данных, и всё будет писаться прямо в него.'
-    );
-  }
   updateStoreInfo();
 
 })();
