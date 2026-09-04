@@ -860,9 +860,11 @@
       </div>
     </div>
     <div class="row full">
-      <div>
+      <div class="ac-wrap">
         <label>Название</label>
         <input type="text" id="a-name" placeholder="Например: Zentorno" autocomplete="off">
+        <div id="a-picked"></div>
+        <div class="ac-list" id="a-ac-list"></div>
       </div>
     </div>
     <div class="row">
@@ -920,7 +922,7 @@
 </div>
 
 <script>
-const APP_VERSION = '2.0';
+const APP_VERSION = '2.1';
 const APP_BUILD_DATE = '04.09.26';
 const TX_KEY = 'flip-transactions-v3';
 const OLD_TX_KEY = 'flip-transactions-v2';
@@ -2012,7 +2014,7 @@ function openQuickCreate(name) {
       <select class="qc-attach" style="margin-bottom:8px;">
         <option value="">Новой карточкой товара</option>
         ${existingClothing.map(p =>
-          `<option value="${p.id}">Расцветкой к «${escapeHtml(p.name)}»${p.gender ? ' ' + GENDER_SYMBOL[p.gender] : ''}</option>`).join('')}
+          `<option value="${p.id}">Вариантом к «${escapeHtml(p.name)}»${p.gender ? ' ' + GENDER_SYMBOL[p.gender] : ''}</option>`).join('')}
       </select>
     </div>
 
@@ -2036,12 +2038,12 @@ function openQuickCreate(name) {
   const syncUI = () => {
     const isCw = hasColorways(catEl.value);
     const list = isCw ? products.filter(p => p.category === catEl.value) : [];
-    f.querySelector('.qc-gender-wrap').classList.toggle('hidden', !isCw);
+    f.querySelector('.qc-gender-wrap').classList.toggle('hidden', !hasGender(catEl.value));
     const wrap = f.querySelector('.qc-attach-wrap');
     wrap.classList.toggle('hidden', !isCw || !list.length);
     if (isCw) {
       attachSel.innerHTML = '<option value="">Новой карточкой товара</option>' +
-        list.map(p => `<option value="${p.id}">Расцветкой к «${escapeHtml(p.name)}»${p.gender ? ' ' + GENDER_SYMBOL[p.gender] : ''}</option>`).join('');
+        list.map(p => `<option value="${p.id}">Вариантом к «${escapeHtml(p.name)}»${p.gender ? ' ' + GENDER_SYMBOL[p.gender] : ''}</option>`).join('');
     }
   };
   catEl.addEventListener('change', syncUI);
@@ -2062,7 +2064,8 @@ function openQuickCreate(name) {
     const newName = f.querySelector('.qc-name').value.trim();
     const newCat = catEl.value;
     const isCw = hasColorways(newCat);
-    const gender = isCw ? (f.querySelector('.qc-gender').value || null) : null;
+    const gEl2 = f.querySelector('.qc-gender');
+    const gender = hasGender(newCat) && gEl2 ? (gEl2.value || null) : null;
     if (!newName) { errEl.textContent = 'Введите название'; errEl.style.display = 'block'; return; }
 
     const attachTo = isCw && attachSel && !f.querySelector('.qc-attach-wrap').classList.contains('hidden')
@@ -2374,9 +2377,9 @@ function openSiblingPicker(lotId) {
   const sibs = siblingsFor(lot);
   if (!sibs.length) return;
 
-  const f = openModal('Купил другую расцветку', `
-    <div class="hint" style="margin-bottom:10px;">Выберите расцветку — форма заполнится ценой из этой покупки (${money(lot.price)}/шт).</div>
-    <input type="text" class="sp-search" placeholder="Поиск расцветки" autocomplete="off" style="margin-bottom:8px;">
+  const f = openModal(lot.category === CLOTHING ? 'Купил другую расцветку' : 'Купил другой вариант', `
+    <div class="hint" style="margin-bottom:10px;">Выберите вариант — форма заполнится ценой из этой покупки (${money(lot.price)}/шт).</div>
+    <input type="text" class="sp-search" placeholder="Поиск" autocomplete="off" style="margin-bottom:8px;">
     <div class="sp-list" style="max-height:340px; overflow-y:auto; border:1px solid var(--line); border-radius:6px;"></div>
     <div class="btn-row" style="margin-top:10px;">
       <button type="button" class="secondary sp-cancel">Отмена</button>
@@ -2995,7 +2998,28 @@ function renderAll() {
 
 /* ---------- products tab ---------- */
 const CLOTHING = 'Одежда';
-const hasColorways = cat => cat === CLOTHING;
+const VARIANT_CATS = ['Одежда', 'Диск'];
+const hasColorways = cat => VARIANT_CATS.includes(cat);
+const hasGender = cat => cat === CLOTHING;
+/* Одежда has расцветки, Диск has вариации — same mechanics, different wording */
+const VW = {
+  'Одежда': { one: 'расцветка', few: 'расцветки', many: 'расцветок', title: 'Расцветки',
+              newTitle: 'Новая расцветка', editTitle: 'Редактирование расцветки',
+              nameLabel: 'Название расцветки', firstLabel: 'Название первой расцветки',
+              show: 'Показать расцветки', hide: 'Свернуть расцветки', need: 'Добавьте хотя бы одну расцветку' },
+  'Диск':   { one: 'вариация', few: 'вариации', many: 'вариаций', title: 'Вариации',
+              newTitle: 'Новая вариация', editTitle: 'Редактирование вариации',
+              nameLabel: 'Название вариации', firstLabel: 'Название первой вариации',
+              show: 'Показать вариации', hide: 'Свернуть вариации', need: 'Добавьте хотя бы одну вариацию' }
+};
+const vw = cat => VW[cat] || VW['Одежда'];
+function vwCount(cat, n) {
+  const w = vw(cat);
+  const t = n % 10, h = n % 100;
+  if (t === 1 && h !== 11) return w.one;
+  if (t >= 2 && t <= 4 && (h < 12 || h > 14)) return w.few;
+  return w.many;
+}
 const GENDER_SYMBOL = { m: '♂', f: '♀' };
 const GENDER_WORD = { m: 'муж', f: 'жен' };
 const genderBadge = g => g ? `<span class="g-badge g-${g}">${GENDER_SYMBOL[g]}</span>` : '';
@@ -3059,13 +3083,17 @@ npCategory.innerHTML = CATEGORIES.map(c => `<option value="${c}">${c}</option>`)
 npCategory.value = CLOTHING;
 
 function applyNewProductUI() {
-  const cw = hasColorways(npCategory.value);
-  $('np-gender-wrap').classList.toggle('hidden', !cw);
-  $('np-name-label').textContent = cw ? 'Название первой расцветки' : 'Название товара';
-  $('np-variation').placeholder = cw ? 'Например: белые штаны Adibas' : 'Например: Автопилот';
+  const cat = npCategory.value;
+  const cw = hasColorways(cat);
+  const w = vw(cat);
+  $('np-gender-wrap').classList.toggle('hidden', !hasGender(cat));
+  $('np-name-label').textContent = cw ? w.firstLabel : 'Название товара';
+  $('np-variation').placeholder = cw
+    ? (cat === CLOTHING ? 'Например: белые штаны Adibas' : 'Например: Cyclone R19 чёрные')
+    : 'Например: Автопилот';
   $('np-hint').textContent = cw
-    ? 'Название товара возьмётся из первой расцветки. Остальные расцветки добавите в карточке ниже.'
-    : 'У этого вида товара расцветок нет — только сам товар.';
+    ? `Название товара возьмётся из первой ${w.one === 'расцветка' ? 'расцветки' : 'вариации'}. Остальные добавите в карточке ниже.`
+    : 'У этого вида товара вариаций нет — только сам товар.';
 }
 npCategory.addEventListener('change', applyNewProductUI);
 applyNewProductUI();
@@ -3083,13 +3111,13 @@ $('new-product-form').addEventListener('submit', async e => {
   const errEl = $('product-form-error');
   const name = $('np-variation').value.trim();
   const cat = npCategory.value;
-  if (!name) { errEl.textContent = hasColorways(cat) ? 'Добавьте хотя бы одну расцветку' : 'Введите название товара'; errEl.style.display = 'block'; return; }
+  if (!name) { errEl.textContent = hasColorways(cat) ? vw(cat).need : 'Введите название товара'; errEl.style.display = 'block'; return; }
   errEl.style.display = 'none';
   const id = Date.now();
   const npImgId = await putImage(npPendingImage);
   products.push({
     id, category: cat, name, image: null, imgId: npImgId,
-    gender: hasColorways(cat) ? ($('np-gender').value || null) : null,
+    gender: hasGender(cat) ? ($('np-gender').value || null) : null,
     colorways: hasColorways(cat) ? [{ id: id + 1, name, image: null, imgId: npImgId }] : []
   });
   await saveProducts();
@@ -3238,7 +3266,7 @@ function renderProducts() {
               <div class="p-name">${escapeHtml(product.name)}${genderBadge(product.gender)}</div>
               <div style="display:flex; gap:6px; margin-top:4px; flex-wrap:wrap;">
                 <span class="p-badge" style="color:${catColor(product.category)}; border-color:${catColor(product.category)}44; background:${catColor(product.category)}14;">${escapeHtml(product.category)}</span>
-                ${cw ? `<span class="p-badge count">${n} ${n === 1 ? 'расцветка' : 'расцветок'}</span>` : ''}
+                ${cw ? `<span class="p-badge count">${n} ${vwCount(product.category, n)}</span>` : ''}
               </div>
             </div>
           </div>
@@ -3248,7 +3276,7 @@ function renderProducts() {
             <button class="icon-btn p-del" aria-label="Удалить товар">🗑</button>
           </div>
         </div>
-        ${cw ? `<button type="button" class="cw-more cw-toggle">${expandedProducts.has(product.id) ? 'Свернуть расцветки' : `Показать расцветки (${n})`}</button><div class="cw-body ${expandedProducts.has(product.id) ? '' : 'hidden'}"><div class="cw-title">Расцветки</div><div class="variation-grid"></div></div>` : ''}`;
+        ${cw ? `<button type="button" class="cw-more cw-toggle">${expandedProducts.has(product.id) ? vw(product.category).hide : `${vw(product.category).show} (${n})`}</button><div class="cw-body ${expandedProducts.has(product.id) ? '' : 'hidden'}"><div class="cw-title">${vw(product.category).title}</div><div class="variation-grid"></div></div>` : ''}`;
       listEl.appendChild(g);
 
       if (cw) {
@@ -3298,16 +3326,17 @@ function openDuplicateForm(productId) {
   const src = products.find(p => p.id === productId);
   if (!src) return;
   const cw = hasColorways(src.category);
+  const showGender = hasGender(src.category);
   const n = (src.colorways || []).length;
   const otherGender = src.gender === 'm' ? 'f' : src.gender === 'f' ? 'm' : '';
 
   const f = openModal('Дублировать товар', `
     <div class="hint" style="margin-bottom:10px;">
-      Копируется «${escapeHtml(src.name)}»${cw ? ` вместе с ${n} ${n === 1 ? 'расцветкой' : 'расцветками'} и фото` : ' вместе с фото'}.
+      Копируется «${escapeHtml(src.name)}»${cw ? ` вместе с ${n} ${vwCount(src.category, n)} и фото` : ' вместе с фото'}.
     </div>
     <label>Название копии</label>
     <input type="text" class="dp-name" style="margin-bottom:8px;" value="${escapeHtml(src.name)}">
-    ${cw ? `<label>Пол</label>
+    ${showGender ? `<label>Пол</label>
     <select class="dp-gender" style="margin-bottom:8px;">
       <option value="m"${otherGender === 'm' ? ' selected' : ''}>Мужское ♂</option>
       <option value="f"${otherGender === 'f' ? ' selected' : ''}>Женское ♀</option>
@@ -3325,7 +3354,7 @@ function openDuplicateForm(productId) {
     const name = f.querySelector('.dp-name').value.trim();
     if (!name) { errEl.textContent = 'Введите название копии'; errEl.style.display = 'block'; return; }
     const gEl = f.querySelector('.dp-gender');
-    const gender = cw ? (gEl ? (gEl.value || null) : null) : null;
+    const gender = showGender ? (gEl ? (gEl.value || null) : null) : null;
     if (products.some(p => p.id !== src.id && p.category === src.category &&
         p.name.trim().toLowerCase() === name.toLowerCase() && (p.gender || null) === gender)) {
       errEl.textContent = 'Такой товар уже есть — измените название или пол';
@@ -3356,6 +3385,7 @@ function openProductEdit(productId) {
   const product = products.find(p => p.id === productId);
   if (!product) return;
   const cw = hasColorways(product.category);
+  const showGender = hasGender(product.category);
   const f = openModal('Редактирование товара', `
     <label>Название товара</label>
     <input type="text" class="pe-name" style="margin-bottom:8px;" value="${escapeHtml(product.name)}">
@@ -3363,7 +3393,7 @@ function openProductEdit(productId) {
     <select class="pe-select" style="margin-bottom:8px;">
       ${CATEGORIES.map(c => `<option value="${c}"${c === product.category ? ' selected' : ''}>${c}</option>`).join('')}
     </select>
-    ${cw ? `<label>Пол</label>
+    ${showGender ? `<label>Пол</label>
     <select class="pe-gender" style="margin-bottom:8px;">
       <option value="m"${product.gender === 'm' ? ' selected' : ''}>Мужское ♂</option>
       <option value="f"${product.gender === 'f' ? ' selected' : ''}>Женское ♀</option>
@@ -3399,12 +3429,12 @@ function openProductEdit(productId) {
     errEl.style.display = 'none';
     const newCat = f.querySelector('.pe-select').value;
     if (hasColorways(product.category) && !hasColorways(newCat) && (product.colorways || []).length > 1) {
-      if (!confirm('У этого вида товара расцветок нет. Все расцветки, кроме первой, будут удалены. Продолжить?')) return;
+      if (!confirm('У этого вида товара вариаций нет. Все, кроме первой, будут удалены. Продолжить?')) return;
     }
     product.name = name;
     product.category = newCat;
     const gEl = f.querySelector('.pe-gender');
-    product.gender = hasColorways(newCat) ? (gEl ? (gEl.value || null) : product.gender || null) : null;
+    product.gender = hasGender(newCat) ? (gEl ? (gEl.value || null) : product.gender || null) : null;
     if (hasColorways(newCat)) {
       if (!product.colorways || !product.colorways.length)
         product.colorways = [{ id: Date.now(), name, image: product.image || null, imgId: product.imgId || null }];
@@ -3434,7 +3464,7 @@ async function deleteProduct(productId) {
   if (!product) return;
   const n = (product.colorways || []).length;
   const msg = n > 1
-    ? `Удалить «${product.name}» вместе с ${n} расцветками? Сделки останутся в истории.`
+    ? `Удалить «${product.name}» вместе с ${n} ${vwCount(product.category, n)}? Сделки останутся в истории.`
     : `Удалить «${product.name}»? Сделки останутся в истории.`;
   if (!confirm(msg)) return;
   const usedElsewhere = id => products.some(p => p.id !== productId &&
@@ -3451,9 +3481,10 @@ function openColorwayForm(productId, colorwayId) {
   if (!product) return;
   const cwItem = colorwayId ? (product.colorways || []).find(c => c.id === colorwayId) : null;
 
-  const f = openModal(cwItem ? 'Редактирование расцветки' : 'Новая расцветка', `
-    <label>Название расцветки</label>
-    <input type="text" class="v-name-input" placeholder="Например: белые штаны Adibas" style="margin-bottom:8px;" value="${cwItem ? escapeHtml(cwItem.name) : ''}">
+  const w = vw(product.category);
+  const f = openModal(cwItem ? w.editTitle : w.newTitle, `
+    <label>${w.nameLabel}</label>
+    <input type="text" class="v-name-input" placeholder="${product.category === CLOTHING ? 'Например: белые штаны Adibas' : 'Например: Cyclone R19 чёрные'}" style="margin-bottom:8px;" value="${cwItem ? escapeHtml(cwItem.name) : ''}">
     <label>Фото</label>
     <div class="dropzone v-zone">Вставьте <b>Ctrl+V</b>, перетащите файл или нажмите для выбора</div>
     <div class="file-row">
@@ -3491,7 +3522,7 @@ function openColorwayForm(productId, colorwayId) {
   f.querySelector('.v-save').addEventListener('click', async () => {
     const errEl = f.querySelector('.v-error');
     const name = f.querySelector('.v-name-input').value.trim();
-    if (!name) { errEl.textContent = 'Введите название расцветки'; errEl.style.display = 'block'; return; }
+    if (!name) { errEl.textContent = w.nameLabel; errEl.style.display = 'block'; return; }
     errEl.style.display = 'none';
     if (!product.colorways) product.colorways = [];
     let cwImgId = null;
@@ -3519,10 +3550,10 @@ async function deleteColorway(productId, colorwayId) {
   const c = (p.colorways || []).find(x => x.id === colorwayId);
   if (!c) return;
   if ((p.colorways || []).length === 1) {
-    alert('Это последняя расцветка. Удалите товар целиком или сначала добавьте другую расцветку.');
+    alert('Это последняя позиция в карточке. Удалите товар целиком или сначала добавьте ещё одну.');
     return;
   }
-  if (!confirm(`Удалить расцветку «${c.name}»? Сделки останутся в истории.`)) return;
+  if (!confirm(`Удалить «${c.name}»? Сделки останутся в истории.`)) return;
   p.colorways = p.colorways.filter(x => x.id !== colorwayId);
   await saveProducts();
   renderProducts();
@@ -3555,7 +3586,7 @@ function openBulkAdd() {
 
     <div class="checkrow bk-group-wrap">
       <input type="checkbox" id="bk-group">
-      <label for="bk-group">Все строки — расцветки одного товара</label>
+      <label for="bk-group">Все строки — варианты одного товара</label>
     </div>
     <div class="bk-groupname-wrap hidden" style="margin-bottom:8px;">
       <label>Название товара</label>
@@ -3583,7 +3614,7 @@ function openBulkAdd() {
 
   const syncUI = () => {
     const cw = hasColorways(catEl.value);
-    genderWrap.classList.toggle('hidden', !cw);
+    genderWrap.classList.toggle('hidden', !hasGender(catEl.value));
     groupWrap.classList.toggle('hidden', !cw);
     groupNameWrap.classList.toggle('hidden', !cw || !groupCb.checked);
   };
@@ -3607,7 +3638,7 @@ function openBulkAdd() {
     };
 
     const baseCat = catEl.value;
-    const baseGender = hasColorways(baseCat) ? (f.querySelector('.bk-gender').value || null) : null;
+    const baseGender = hasGender(baseCat) ? (f.querySelector('.bk-gender').value || null) : null;
     const grouped = hasColorways(baseCat) && groupCb.checked;
 
     let added = 0, skipped = 0;
@@ -3635,14 +3666,14 @@ function openBulkAdd() {
           const parts = line.split(';').map(x => x.trim());
           if (parts[0] && CATEGORIES.includes(parts[0])) cat = parts[0];
           name = parts[1] || parts[0];
-          gender = hasColorways(cat) ? parseGender(parts[2]) : null;
+          gender = hasGender(cat) ? parseGender(parts[2]) : null;
         }
         if (!name) return;
         if (productExists(cat, name, gender)) { skipped++; return; }
         const id = base + i * 2;
         products.push({
           id, category: cat, name, image: null, imgId: null,
-          gender: hasColorways(cat) ? gender : null,
+          gender: hasGender(cat) ? gender : null,
           colorways: hasColorways(cat) ? [{ id: id + 1, name, image: null, imgId: null }] : []
         });
         added++;
@@ -3725,6 +3756,114 @@ $('cat-import-file').addEventListener('change', async () => {
   renderProducts();
 });
 
+/* ---------- catalog picker for the assets form ---------- */
+function openQuickCreateFor(name, category, onCreated) {
+  const cw = hasColorways(category);
+  const showGender = hasGender(category);
+  const list = cw ? products.filter(p => p.category === category) : [];
+
+  const f = openModal('Новый товар', `
+    <div class="hint" style="margin-bottom:10px;">Товар появится в каталоге и сразу подставится сюда.</div>
+    <label>Название</label>
+    <input type="text" class="qa-name" value="${escapeHtml(name)}" style="margin-bottom:8px;">
+    <label>Вид товара</label>
+    <select class="qa-cat" style="margin-bottom:8px;">
+      ${[...CATEGORIES].map(c => `<option value="${c}"${c === category ? ' selected' : ''}>${c}</option>`).join('')}
+    </select>
+    <div class="qa-gender-wrap${showGender ? '' : ' hidden'}">
+      <label>Пол</label>
+      <select class="qa-gender" style="margin-bottom:8px;">
+        <option value="m">Мужское ♂</option>
+        <option value="f">Женское ♀</option>
+        <option value="">Унисекс</option>
+      </select>
+    </div>
+    <div class="qa-attach-wrap${cw && list.length ? '' : ' hidden'}">
+      <label>Куда добавить</label>
+      <select class="qa-attach" style="margin-bottom:8px;">
+        <option value="">Новой карточкой товара</option>
+        ${list.map(p => `<option value="${p.id}">Вариантом к «${escapeHtml(p.name)}»</option>`).join('')}
+      </select>
+    </div>
+    <label>Фото (необязательно)</label>
+    <div class="dropzone qa-zone">Вставьте <b>Ctrl+V</b>, перетащите файл или нажмите для выбора</div>
+    <div class="file-row">
+      <input type="file" accept="image/*" class="qa-file hidden">
+      <img class="thumb-preview qa-thumb" style="display:none;">
+    </div>
+    <div class="error qa-err"></div>
+    <div class="btn-row" style="margin-top:10px;">
+      <button type="button" class="qa-save">Создать и выбрать</button>
+      <button type="button" class="secondary qa-cancel">Отмена</button>
+    </div>`);
+
+  const catEl = f.querySelector('.qa-cat');
+  const attachSel = f.querySelector('.qa-attach');
+  let pendingImage = null;
+
+  const syncUI = () => {
+    const isCw = hasColorways(catEl.value);
+    const l = isCw ? products.filter(p => p.category === catEl.value) : [];
+    f.querySelector('.qa-gender-wrap').classList.toggle('hidden', !hasGender(catEl.value));
+    f.querySelector('.qa-attach-wrap').classList.toggle('hidden', !isCw || !l.length);
+    if (isCw) {
+      attachSel.innerHTML = '<option value="">Новой карточкой товара</option>' +
+        l.map(p => `<option value="${p.id}">Вариантом к «${escapeHtml(p.name)}»</option>`).join('');
+    }
+  };
+  catEl.addEventListener('change', syncUI);
+
+  attachImageInput(f.querySelector('.qa-zone'), f.querySelector('.qa-file'), data => {
+    pendingImage = data;
+    const t = f.querySelector('.qa-thumb');
+    t.src = data; t.style.display = 'block';
+    f.querySelector('.qa-zone').textContent = 'Фото добавлено — вставьте другое, чтобы заменить';
+  });
+
+  f.querySelector('.qa-cancel').addEventListener('click', closeModal);
+  f.querySelector('.qa-name').focus();
+
+  f.querySelector('.qa-save').addEventListener('click', async () => {
+    const err = f.querySelector('.qa-err');
+    const newName = f.querySelector('.qa-name').value.trim();
+    const newCat = catEl.value;
+    const isCw = hasColorways(newCat);
+    const gEl = f.querySelector('.qa-gender');
+    const gender = hasGender(newCat) && gEl ? (gEl.value || null) : null;
+    if (!newName) { err.textContent = 'Введите название'; err.style.display = 'block'; return; }
+
+    const attachTo = isCw && !f.querySelector('.qa-attach-wrap').classList.contains('hidden')
+      ? attachSel.value : '';
+    if (!attachTo && productExists(newCat, newName, gender)) {
+      err.textContent = 'Такой товар уже есть в каталоге'; err.style.display = 'block'; return;
+    }
+    err.style.display = 'none';
+
+    const imgId = await putImage(pendingImage);
+    let entry;
+    if (attachTo) {
+      const owner = products.find(p => p.id === Number(attachTo));
+      if (!owner.colorways) owner.colorways = [];
+      const cwId = Date.now();
+      owner.colorways.push({ id: cwId, name: newName, image: null, imgId });
+      if (!owner.imgId && imgId) owner.imgId = imgId;
+      entry = { id: cwId, name: newName, image: pendingImage, category: owner.category, gender: owner.gender || null };
+    } else {
+      const id = Date.now();
+      products.push({
+        id, category: newCat, name: newName, image: null, imgId, gender,
+        colorways: isCw ? [{ id: id + 1, name: newName, image: null, imgId }] : []
+      });
+      entry = { id, name: newName, image: pendingImage, category: newCat, gender };
+    }
+    imageIndex = null;
+    await saveProducts();
+    closeModal();
+    renderProducts();
+    onCreated(entry);
+  });
+}
+
 /* ---------- assets ---------- */
 const ASSET_KEY = 'flip-assets';
 let assets = [];
@@ -3739,6 +3878,112 @@ aFilterCat.innerHTML = '<option value="">Все виды</option>' + [...CATEGOR
 
 attachMoneyInput($('a-price'));
 attachMoneyInput($('a-value'));
+
+/* catalog picker on the asset name field */
+const aName = $('a-name');
+const aAcList = $('a-ac-list');
+let aSelected = null;
+
+function aMatches(query) {
+  const pool = entriesInCategory(aCategory.value);
+  const q = query.trim().toLowerCase();
+  const sorted = [...pool].sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+  if (!q) return sorted;
+  const words = q.split(/\s+/).filter(Boolean);
+  return sorted.filter(v => words.every(w => v.name.toLowerCase().includes(w)));
+}
+
+function renderAPicked() {
+  const box = $('a-picked');
+  const typed = aName.value.trim();
+  const entry = typed && aCategory.value !== OTHER
+    ? (aSelected || resolveEntry(aCategory.value, typed)) : null;
+  if (!entry) { box.innerHTML = ''; aName.classList.remove('hidden'); return; }
+
+  const img = entry.image || findImageByName(entry.category, entry.name, entry.gender);
+  aName.classList.add('hidden');
+  box.innerHTML = `
+    <div class="picked" id="a-picked-row">
+      ${img ? `<img src="${img}">` : `<div class="picked-noimg">—</div>`}
+      <div class="picked-text">
+        ${escapeHtml(entry.name)}${genderBadge(entry.gender)}
+        <div class="picked-sub">${escapeHtml(entry.category)} · нажмите, чтобы выбрать другой</div>
+      </div>
+      <button type="button" class="picked-clear" id="a-picked-clear" aria-label="Очистить">✕</button>
+    </div>`;
+
+  $('a-picked-row').addEventListener('click', e => {
+    if (e.target.id === 'a-picked-clear') return;
+    aName.classList.remove('hidden');
+    box.innerHTML = '';
+    aName.value = '';
+    aSelected = null;
+    aName.focus();
+    renderAAc(aMatches(''));
+  });
+  $('a-picked-clear').addEventListener('click', e => {
+    e.stopPropagation();
+    aName.value = '';
+    aSelected = null;
+    aName.classList.remove('hidden');
+    box.innerHTML = '';
+    aName.focus();
+  });
+}
+
+function renderAAc(matches) {
+  const typed = aName.value.trim();
+  const canCreate = typed && aCategory.value !== OTHER && !resolveEntry(aCategory.value, typed);
+  const createRow = canCreate ? `
+    <div class="ac-create" id="a-ac-create">
+      <div class="ac-plus">+</div>
+      <div class="ac-create-text">
+        Создать <b>${escapeHtml(typed)}</b>
+        <div class="ac-create-sub">${escapeHtml(aCategory.value)}</div>
+      </div>
+    </div>` : '';
+
+  const MAX = 60;
+  const view = matches.slice(0, MAX);
+  aAcList.innerHTML = (view.length
+      ? view.map(v => `
+        <div class="ac-item" data-id="${v.id}">
+          ${v.image ? `<img class="ac-thumb" src="${v.image}">` : `<div class="ac-thumb empty">—</div>`}
+          <div class="ac-text">${escapeHtml(v.name)}${genderBadge(v.gender)}</div>
+        </div>`).join('')
+      : (canCreate ? '' : `<div class="ac-none">Ничего не найдено в «${escapeHtml(aCategory.value)}»</div>`)) +
+    (matches.length > MAX ? `<div class="ac-count">Показано ${MAX} из ${matches.length}</div>` : '') +
+    createRow;
+  aAcList.style.display = 'block';
+
+  aAcList.querySelectorAll('.ac-item').forEach(item => {
+    item.addEventListener('mousedown', ev => {
+      ev.preventDefault();
+      const v = view.find(m => String(m.id) === item.dataset.id);
+      if (v) { aName.value = v.name; aSelected = v; }
+      aAcList.style.display = 'none';
+      renderAPicked();
+    });
+  });
+
+  const cr = $('a-ac-create');
+  if (cr) cr.addEventListener('mousedown', ev => {
+    ev.preventDefault();
+    aAcList.style.display = 'none';
+    openQuickCreateFor(aName.value.trim(), aCategory.value, entry => {
+      aCategory.value = entry.category;
+      aName.value = entry.name;
+      aSelected = entry;
+      if (entry.image) { aPendingImage = entry.image; $('a-thumb').src = entry.image; $('a-thumb').style.display = 'block'; }
+      renderAPicked();
+    });
+  });
+}
+
+aName.addEventListener('input', () => { aSelected = null; renderAAc(aMatches(aName.value)); });
+aName.addEventListener('focus', () => renderAAc(aMatches(aName.value)));
+aName.addEventListener('blur', () => setTimeout(() => { aAcList.style.display = 'none'; renderAPicked(); }, 150));
+aCategory.addEventListener('change', () => { aName.value = ''; aSelected = null; renderAPicked(); });
 
 async function loadAssets() {
   try {
@@ -3798,6 +4043,8 @@ function resetAssetForm() {
   editingAssetId = null;
   aPendingImage = null;
   $('a-name').value = '';
+  aSelected = null;
+  if (typeof renderAPicked === 'function') renderAPicked();
   $('a-price').value = '';
   $('a-value').value = '';
   $('a-qty').value = '1';
@@ -3824,6 +4071,10 @@ $('asset-form').addEventListener('submit', async e => {
   if (!(valueTotal > 0)) { errEl.textContent = 'Укажите реальную оценку'; errEl.style.display = 'block'; return; }
   errEl.style.display = 'none';
 
+  if (!aPendingImage && aSelected) {
+    const src = aSelected.image || findImageByName(aSelected.category, aSelected.name, aSelected.gender);
+    if (src) aPendingImage = src;
+  }
   let aImgId = null;
   if (aPendingImage) {
     const existing = editingAssetId ? assets.find(a => a.id === editingAssetId) : null;
@@ -4029,6 +4280,8 @@ function startAssetEdit(id) {
   editingAssetId = id;
   aCategory.value = a.category;
   $('a-name').value = a.name;
+  aSelected = null;
+  renderAPicked();
   setMoney($('a-price'), a.price);
   setMoney($('a-value'), a.value !== undefined ? a.value : a.price);
   $('a-qty').value = a.qty;
