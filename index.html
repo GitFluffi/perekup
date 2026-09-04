@@ -922,7 +922,7 @@
 </div>
 
 <script>
-const APP_VERSION = '2.1';
+const APP_VERSION = '2.2';
 const APP_BUILD_DATE = '04.09.26';
 const TX_KEY = 'flip-transactions-v3';
 const OLD_TX_KEY = 'flip-transactions-v2';
@@ -1238,9 +1238,14 @@ function isEmptyPayload(key, value) {
   return false;
 }
 
+/* emptiness caused by an explicit delete is legitimate and must reach the cloud */
+const intentionalEmpty = new Set();
+function allowEmpty(key) { intentionalEmpty.add(key); }
+
 /* refuse to blank out data that already exists in the cloud */
 async function wouldWipe(key, value) {
   if (!isEmptyPayload(key, value)) return false;
+  if (intentionalEmpty.has(key)) return false;
   try {
     const res = await fetch(
       `${CLOUD_URL}/rest/v1/${CLOUD_TABLE}?space=eq.${encodeURIComponent(cloudSpace)}&key=eq.${encodeURIComponent(key)}&select=value`,
@@ -1266,6 +1271,7 @@ async function flushCloud() {
       if (key === 'flip-assets') value = { assets, images: collectImages() };
       if (await wouldWipe(key, value)) { blocked++; continue; }
       await cloudPush(key, value);
+      intentionalEmpty.delete(key);
     }
     if (blocked) {
       showBanner(
@@ -2682,6 +2688,7 @@ async function deleteTx(id) {
     if (!confirm(`Удалить сделку «${t.action} · ${t.name}» (${sum}, ${when})?${back}`)) return;
   }
   transactions = transactions.filter(x => x.id !== id);
+  if (!transactions.length) allowEmpty(TX_KEY);
   if (editingId === id) resetForm();
   await saveTx();
   renderAll();
@@ -3471,6 +3478,7 @@ async function deleteProduct(productId) {
     (p.imgId === id || (p.colorways || []).some(c => c.imgId === id)));
   const ids = new Set([product.imgId, ...(product.colorways || []).map(c => c.imgId)].filter(Boolean));
   products = products.filter(p => p.id !== productId);
+  if (!products.length) allowEmpty(PROD_KEY);
   for (const id of ids) if (!usedElsewhere(id)) await deleteImage(id);
   await saveProducts();
   renderProducts();
@@ -4302,6 +4310,7 @@ async function deleteAsset(id) {
   const up = (a.upgrades || []).length;
   if (!confirm(`Удалить «${a.name}» из имущества?\n\nПотрачено ${money(assetSpent(a))}${up ? `, доп. расходов: ${up}` : ''}.`)) return;
   assets = assets.filter(x => x.id !== id);
+  if (!assets.length) allowEmpty(ASSET_KEY);
   if (a.imgId && !assets.some(x => x.imgId === a.imgId)) await deleteImage(a.imgId);
   if (editingAssetId === id) resetAssetForm();
   await saveAssets();
