@@ -1,0 +1,4419 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Учёт перепродаж — Majestic RP</title>
+<style>
+  :root {
+    --bg: #0d1210;
+    --panel: #141a17;
+    --panel-2: #1b2320;
+    --line: #263129;
+    --text: #e8ece9;
+    --muted: #8fa398;
+    --green: #4fd68c;
+    --green-dim: #2a5c42;
+    --red: #e05a5a;
+    --gold: #d9b25c;
+    --blue: #6fb3e0;
+    --card-green: #2d4f26;
+    --card-red: #4f2626;
+    --card-blue: #23394d;
+    --chip: #1c1c1c;
+    --mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0 auto; background: var(--bg); color: var(--text);
+    font-family: var(--sans); padding: 20px 16px 60px; max-width: 720px;
+  }
+  h1 { font-size: 19px; font-weight: 600; margin: 4px 0 2px; }
+  .subtitle { color: var(--muted); font-size: 13px; margin: 0 0 16px; }
+
+  .maintabs {
+    display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid var(--line);
+    overflow-x: auto; overflow-y: hidden; scrollbar-width: none; -ms-overflow-style: none;
+  }
+  .maintabs::-webkit-scrollbar { display: none; }
+  .maintab {
+    background: none; border: none; color: var(--muted); font-size: 13.5px; font-weight: 600;
+    padding: 8px 6px 10px; cursor: pointer; width: auto; white-space: nowrap; flex: 0 0 auto;
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
+  }
+  .maintab.active { color: var(--gold); border-bottom-color: var(--gold); }
+  .view { display: none; }
+  .view.active { display: block; }
+
+  .cards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 20px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 10px; }
+  .card .label { font-size: 11px; color: var(--muted); }
+  .card .value { font-family: var(--mono); font-size: 17px; font-weight: 600; margin-top: 4px; }
+  .card .value.pos { color: var(--green); }
+  .card .value.neg { color: var(--red); }
+  .card .value.neutral { color: var(--blue); }
+  .card .sub { font-size: 10.5px; color: var(--muted); margin-top: 2px; }
+
+  form { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px; margin-bottom: 20px; }
+  .form-title { font-size: 13px; color: var(--muted); margin-bottom: 10px; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+  .row.full { grid-template-columns: 1fr; }
+  label { font-size: 11px; color: var(--muted); display: block; margin-bottom: 3px; }
+  input, select, textarea {
+    width: 100%; background: var(--panel-2); border: 1px solid var(--line);
+    border-radius: 5px; color: var(--text); padding: 8px 9px; font-size: 14px; font-family: var(--sans);
+  }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--gold); }
+  input[type="number"] { font-family: var(--mono); }
+  textarea { resize: vertical; min-height: 38px; }
+  select option { background: var(--panel-2); color: var(--text); }
+  #f-action.act-pos { color: var(--green); font-weight: 600; }
+  #f-action.act-neg { color: var(--red); font-weight: 600; }
+  .preview { font-size: 12px; color: var(--muted); margin: 6px 0 10px; font-family: var(--mono); }
+  .preview b.pos { color: var(--green); }
+  .preview b.neg { color: var(--red); }
+  .hint { font-size: 11.5px; color: var(--muted); margin: -2px 0 8px; line-height: 1.4; }
+  button {
+    background: var(--green-dim); color: var(--green); border: 1px solid var(--green);
+    border-radius: 5px; padding: 10px 16px; font-size: 13px; font-weight: 600; cursor: pointer; width: 100%;
+  }
+  button:hover { background: #326b4f; }
+  button.secondary { background: none; color: var(--gold); border: 1px solid var(--gold); }
+  button.secondary:hover { background: #3a2f18; }
+  .error { color: var(--red); font-size: 12px; margin: 4px 0 0; display: none; }
+  .checkrow { display: flex; align-items: center; gap: 8px; margin: 10px 0 12px; }
+  .checkrow input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--gold); margin: 0; }
+  .checkrow label { margin: 0; font-size: 13px; color: var(--text); cursor: pointer; }
+  .section-title { font-size: 13px; color: var(--muted); margin: 24px 0 8px; display: flex; justify-content: space-between; align-items: center; }
+
+  .deal-card { border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; display: flex; gap: 12px; align-items: flex-start; }
+  .deal-card.pos { background: var(--card-green); }
+  .deal-card.neg { background: var(--card-red); }
+  .deal-card.open { background: var(--card-blue); }
+  .deal-img { width: 56px; height: 56px; border-radius: 8px; object-fit: cover; background: rgba(0,0,0,0.25); flex-shrink: 0; }
+  .deal-img.empty { display: flex; align-items: center; justify-content: center; font-size: 10px; color: rgba(255,255,255,0.4); }
+  .deal-body { flex: 1; min-width: 0; }
+  .deal-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+  .deal-name { font-size: 15px; font-weight: 600; word-break: break-word; }
+  .deal-actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .icon-btn {
+    width: 28px; height: 28px; padding: 0; border-radius: 7px; background: rgba(0,0,0,0.3);
+    border: 1px solid rgba(255,255,255,0.15); color: rgba(255,255,255,0.75); font-size: 13px;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+  }
+  .icon-btn:hover { background: rgba(0,0,0,0.5); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
+  .chip { background: var(--chip); border-radius: 999px; padding: 4px 11px; font-size: 12.5px; font-weight: 600; color: var(--text); }
+  .chip.green { color: var(--green); }
+  .chip.red { color: var(--red); }
+  .chip.blue { color: var(--blue); }
+  .chip.muted { font-weight: 400; color: #c4ccc7; }
+  .deal-comment { font-size: 12.5px; color: rgba(255,255,255,0.72); margin-top: 8px; word-break: break-word; }
+  .deal-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 9px; gap: 8px; flex-wrap: wrap; }
+  .quick-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+  .quick-btn { width: auto; background: rgba(0,0,0,0.32); border: none; color: #d5dbd7; font-size: 12px; font-weight: 400; padding: 6px 12px; border-radius: 7px; }
+  .quick-btn:hover { background: rgba(0,0,0,0.5); }
+  .quick-btn.sell { background: var(--green-dim); color: var(--green); font-weight: 600; }
+  .quick-btn.sell:hover { background: #326b4f; }
+  .quick-btn.expense { background: var(--red-dim); color: var(--red); font-weight: 600; }
+  .quick-btn.expense:hover { background: #7a3737; }
+  .buy-wrap { position: relative; display: inline-block; }
+  .buy-menu {
+    position: absolute; bottom: calc(100% + 4px); left: 0; z-index: 40;
+    background: var(--panel-2); border: 1px solid var(--gold); border-radius: 7px;
+    min-width: 170px; overflow: hidden; display: none;
+  }
+  .buy-menu.open { display: block; }
+  .buy-menu button {
+    width: 100%; background: none; border: none; color: var(--text); text-align: left;
+    font-size: 12.5px; font-weight: 400; padding: 9px 11px; border-radius: 0;
+  }
+  .buy-menu button:hover { background: #26332c; color: var(--gold); }
+  .buy-menu button + button { border-top: 1px solid var(--line); }
+  .deal-date { font-size: 12px; color: rgba(255,255,255,0.55); font-family: var(--mono); white-space: nowrap; }
+
+  .sell-form { background: rgba(0,0,0,0.3); border-radius: 8px; padding: 10px; margin-top: 10px; }
+  .sell-form label { color: rgba(255,255,255,0.6); }
+  .sell-form input, .sell-form textarea { background: rgba(0,0,0,0.35); border-color: rgba(255,255,255,0.15); }
+  .sell-preview { font-size: 12px; font-family: var(--mono); margin: 4px 0 8px; color: rgba(255,255,255,0.75); }
+
+  .empty { color: var(--muted); font-size: 13px; text-align: center; padding: 24px 0; }
+  .listwrap { max-height: 560px; overflow-y: auto; }
+  .profit-pos { color: var(--green); }
+  .profit-neg { color: var(--red); }
+
+  .ac-wrap { position: relative; }
+  .ac-list {
+    position: absolute; top: calc(100% + 2px); left: 0; right: 0; background: var(--panel-2);
+    border: 1px solid var(--gold); border-radius: 5px; max-height: 220px; overflow-y: auto; z-index: 30; display: none;
+  }
+  .ac-item { display: flex; align-items: center; gap: 8px; padding: 7px 9px; cursor: pointer; border-bottom: 1px solid var(--line); }
+  .ac-item:last-child { border-bottom: none; }
+  .ac-item:hover { background: #26332c; }
+  .ac-thumb { width: 26px; height: 26px; border-radius: 4px; object-fit: cover; background: var(--line); flex-shrink: 0; }
+  .ac-thumb.empty { display: flex; align-items: center; justify-content: center; font-size: 10px; color: var(--muted); }
+  .ac-text { flex: 1; font-size: 13px; }
+  .ac-none { padding: 9px; font-size: 12.5px; color: var(--muted); }
+  .ac-count {
+    padding: 6px 9px; font-size: 11px; color: var(--muted);
+    border-top: 1px solid var(--line); position: sticky; bottom: 0; background: var(--panel-2);
+  }
+  .ac-create {
+    display: flex; align-items: center; gap: 9px;
+    padding: 10px 11px; margin: 6px; border-radius: 6px;
+    border: 1px dashed var(--gold); background: rgba(217, 178, 92, 0.07);
+    color: var(--gold); font-size: 12.5px; line-height: 1.3; cursor: pointer;
+    transition: background .12s;
+  }
+  .ac-create:hover { background: rgba(217, 178, 92, 0.16); }
+  .ac-create .ac-plus {
+    width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--gold); color: var(--bg); font-size: 14px; font-weight: 600; line-height: 1;
+  }
+  .ac-create .ac-create-text { flex: 1; min-width: 0; }
+  .ac-create .ac-create-text b { color: var(--text); font-weight: 600; }
+  .ac-create .ac-create-sub { color: var(--muted); font-size: 11px; margin-top: 2px; }
+  .picked {
+    display: flex; align-items: center; gap: 9px; width: 100%;
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 5px;
+    padding: 6px 9px; cursor: pointer; text-align: left;
+  }
+  .picked:hover { border-color: var(--gold); }
+  .picked img, .picked .picked-noimg {
+    width: 34px; height: 34px; border-radius: 5px; object-fit: cover; background: var(--line); flex-shrink: 0;
+  }
+  .picked .picked-noimg { display: flex; align-items: center; justify-content: center; font-size: 9px; color: var(--muted); }
+  .picked-text { flex: 1; min-width: 0; font-size: 13px; }
+  .picked-sub { font-size: 10.5px; color: var(--muted); margin-top: 2px; }
+  .picked-clear { width: auto; background: none; border: none; color: var(--muted); font-size: 14px; padding: 0 4px; }
+  .picked-clear:hover { color: var(--red); background: none; }
+
+  .seg { display: flex; gap: 6px; margin-bottom: 14px; }
+  .seg button {
+    flex: 1; background: var(--panel); border: 1px solid var(--line); color: var(--muted);
+    font-size: 13px; padding: 9px 10px;
+  }
+  .seg button.active { border-color: var(--gold); color: var(--gold); background: #251f11; }
+  .day-row {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    padding: 11px 13px; margin-bottom: 8px; cursor: pointer;
+  }
+  .day-row.open { border-color: var(--gold); }
+  .day-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  .day-date { font-size: 14px; font-weight: 600; }
+  .day-weekday { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .day-net { font-family: var(--mono); font-size: 15px; font-weight: 600; white-space: nowrap; }
+  .day-meta { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 8px; font-size: 12px; color: var(--muted); }
+  .day-meta span b { font-family: var(--mono); font-weight: 500; color: var(--text); }
+  .day-details { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 10px; }
+  .day-line { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; padding: 4px 0; }
+  .day-line .dl-name { flex: 1; min-width: 0; word-break: break-word; }
+  .day-line .dl-val { font-family: var(--mono); white-space: nowrap; }
+  .day-line .dl-time { color: var(--muted); font-family: var(--mono); font-size: 11px; }
+  .stat-item { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin-bottom: 10px; }
+  .stat-item-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 4px; }
+  .si-name { font-size: 14px; font-weight: 600; word-break: break-word; }
+  .si-cat { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .si-net { font-family: var(--mono); font-size: 15px; font-weight: 600; white-space: nowrap; }
+  .si-block { border-top: 1px solid var(--line); padding-top: 9px; margin-top: 9px; }
+  .si-block-title { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+  .si-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px 12px; }
+  .si-row { display: flex; justify-content: space-between; font-size: 12.5px; gap: 8px; }
+  .si-row span:first-child { color: var(--muted); }
+  .si-row span:last-child { font-family: var(--mono); }
+  .si-img { width: 42px; height: 42px; border-radius: 6px; object-fit: cover; background: var(--line); flex-shrink: 0; }
+
+  .cat-select-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+  .cat-opt { background: var(--panel-2); border: 1px solid var(--line); border-radius: 5px; padding: 8px 9px; font-size: 12.5px; cursor: pointer; text-align: left; color: var(--text); font-weight: 400; }
+  .cat-opt.selected { border-color: var(--gold); color: var(--gold); }
+  .product-group { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin-bottom: 12px; }
+  .p-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .p-name { font-size: 14px; font-weight: 600; word-break: break-word; }
+  .p-badge {
+    font-size: 10.5px; color: var(--gold); border: 1px solid #4a3c1f; background: #211a0e;
+    border-radius: 4px; padding: 2px 7px; white-space: nowrap;
+  }
+  .p-badge.count { color: var(--blue); border-color: #26435c; background: #10202b; }
+  .p-thumb { width: 44px; height: 44px; border-radius: 7px; object-fit: cover; background: var(--line); flex-shrink: 0; }
+  .p-thumb.empty { display: flex; align-items: center; justify-content: center; font-size: 9px; color: var(--muted); }
+  .cw-title { font-size: 11px; color: var(--muted); margin: 10px 0 7px; }
+  .product-group-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .pg-cat { font-size: 13px; font-weight: 600; color: var(--gold); }
+  .pg-count { font-size: 11px; color: var(--muted); }
+  .variation-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; align-items: start; }
+  @media (min-width: 560px) { .variation-grid { grid-template-columns: repeat(4, 1fr); } }
+  .variation-card { background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 6px; position: relative; }
+  .variation-card img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 4px; display: block; background: var(--line); }
+  .v-noimg { width: 100%; aspect-ratio: 1; border-radius: 4px; background: var(--line); display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 10px; }
+  .v-name {
+    font-size: 11px; margin-top: 5px; line-height: 1.3; word-break: break-word;
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+    overflow: hidden; min-height: 43px;
+  }
+  .cw-more {
+    width: 100%; margin-top: 10px; background: var(--panel-2); border: 1px solid var(--line);
+    color: var(--muted); font-size: 12px; font-weight: 500; padding: 8px;
+  }
+  .cw-body { margin-top: 4px; }
+  .form-toggle {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    width: 100%; background: none; border: none; padding: 0; cursor: pointer;
+    color: var(--muted); font-size: 13px; font-weight: 500;
+  }
+  .form-toggle:hover { background: none; color: var(--gold); }
+  .form-toggle .ft-arrow { font-size: 11px; }
+  .cw-more:hover { border-color: var(--gold); color: var(--gold); }
+  .v-edit {
+    position: absolute; top: 3px; left: 3px; background: rgba(13,18,16,0.85);
+    color: var(--gold); border: none; width: 18px; height: 18px; border-radius: 50%;
+    font-size: 10px; line-height: 1; cursor: pointer; padding: 0;
+  }
+  .product-group-head .icon-btn { width: 26px; height: 26px; background: var(--panel-2); border-color: var(--line); color: var(--muted); }
+  .product-group-head .icon-btn:hover { color: var(--text); background: var(--line); }
+  .v-del { position: absolute; top: 3px; right: 3px; background: rgba(13,18,16,0.85); color: var(--red); border: none; width: 18px; height: 18px; border-radius: 50%; font-size: 12px; line-height: 1; cursor: pointer; padding: 0; }
+  .add-variation-card { background: none; border: 1px dashed var(--line); border-radius: 6px; padding: 6px; color: var(--muted); font-size: 20px; display: flex; align-items: center; justify-content: center; aspect-ratio: 1; cursor: pointer; }
+  .add-variation-card:hover { border-color: var(--gold); color: var(--gold); }
+  .modal-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.72); z-index: 200;
+    display: flex; align-items: center; justify-content: center; padding: 16px;
+    overflow-y: auto;
+  }
+  .modal-box {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 16px; width: 100%; max-width: 420px; max-height: 88vh; overflow-y: auto;
+  }
+  .modal-title { font-size: 14px; font-weight: 600; margin-bottom: 12px; }
+  .inline-form { background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 10px; margin-top: 10px; }
+  .file-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
+  .dropzone {
+    border: 1px dashed var(--line); border-radius: 7px; padding: 12px 10px;
+    text-align: center; font-size: 12px; color: var(--muted); cursor: pointer;
+    margin-bottom: 8px; transition: border-color .12s, color .12s;
+  }
+  .dropzone:hover { border-color: var(--gold); color: var(--gold); }
+  .dropzone.hot { border-color: var(--green); color: var(--green); background: #16241d; }
+  .dropzone:focus { outline: none; border-color: var(--gold); color: var(--gold); }
+  .dropzone b { color: var(--text); font-weight: 500; }
+  .thumb-preview { width: 40px; height: 40px; object-fit: cover; border-radius: 5px; background: var(--line); }
+  .btn-row { display: flex; gap: 8px; }
+  input[type="file"] { padding: 6px; font-size: 12px; }
+  .hidden { display: none !important; }
+  .diag-out { font-size: 12.5px; margin-top: 10px; line-height: 1.7; font-family: var(--mono); }
+  .diag-out .ok { color: var(--green); }
+  .diag-out .bad { color: var(--red); }
+  .diag-out .warn { color: var(--gold); }
+  .cloud-dot {
+    display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+    background: var(--muted); margin-left: 6px; vertical-align: middle;
+  }
+  .ver-tag {
+    display: inline-block; margin-left: 6px; font-size: 11px; color: var(--muted);
+    border: 1px solid var(--line); border-radius: 4px; padding: 1px 6px; vertical-align: middle;
+  }
+  .banner {
+    border-radius: 8px; padding: 10px 12px; font-size: 12.5px; line-height: 1.45;
+    margin-bottom: 14px; border: 1px solid var(--red); background: #2a1414; color: #f0c0c0;
+  }
+  .banner.ok { border-color: var(--green); background: #14251c; color: #b6dcc6; }
+  .banner button { width: auto; margin-top: 8px; padding: 6px 12px; font-size: 12px; }
+
+  .asset-card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 11px 13px; margin-bottom: 8px; display: flex; gap: 11px; align-items: flex-start;
+  }
+  .asset-img { width: 46px; height: 46px; border-radius: 7px; object-fit: cover; background: var(--line); flex-shrink: 0; }
+  .asset-img.empty { display: flex; align-items: center; justify-content: center; font-size: 9px; color: var(--muted); }
+  .asset-body { flex: 1; min-width: 0; }
+  .asset-head { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
+  .asset-name { font-size: 14px; font-weight: 600; word-break: break-word; }
+  .asset-value { font-family: var(--mono); font-size: 14px; font-weight: 600; color: var(--blue); white-space: nowrap; }
+  .asset-meta { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 5px; }
+  .asset-comment { font-size: 12.5px; color: var(--muted); margin-top: 6px; word-break: break-word; }
+  .cat-total { display: flex; justify-content: space-between; font-size: 12.5px; padding: 5px 0; border-bottom: 1px solid var(--line); }
+  .cat-total span:last-child { font-family: var(--mono); }
+  .upg-list { margin-top: 9px; border-top: 1px solid var(--line); padding-top: 8px; }
+  .upg-row { display: flex; align-items: center; gap: 8px; font-size: 12.5px; padding: 4px 0; }
+  .upg-row .u-name { flex: 1; min-width: 0; word-break: break-word; }
+  .upg-row .u-cat { font-size: 10.5px; color: var(--gold); }
+  .upg-row .u-val { font-family: var(--mono); white-space: nowrap; color: var(--muted); }
+  .upg-row .u-del { background: none; border: none; color: var(--muted); font-size: 13px; width: auto; padding: 0 2px; cursor: pointer; }
+  .upg-row .u-del:hover { color: var(--red); }
+  .cat-group-title { font-size: 12px; color: var(--gold); margin: 16px 0 8px; font-weight: 600; }
+
+  .profile-bar { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; align-items: center; }
+  .profile-btn {
+    width: 40px; height: 40px; padding: 0; border-radius: 8px;
+    background: var(--panel); border: 1px solid var(--line); color: var(--muted);
+    font-size: 15px; font-weight: 600; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .profile-btn:hover { background: var(--panel-2); }
+  .profile-btn.active { border-color: var(--gold); color: var(--gold); background: #251f11; }
+  .profile-btn.all { width: auto; padding: 0 14px; font-size: 13px; }
+  .profile-btn { gap: 6px; }
+  .profile-btn .pb-dot {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--blue); flex-shrink: 0;
+  }
+  .profile-btn.active .pb-dot { background: var(--gold); }
+  .profile-note { font-size: 12px; color: var(--muted); margin: -6px 0 14px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .profile-title { font-size: 14px; font-weight: 600; color: var(--text); }
+  .rename-btn {
+    width: auto; background: none; border: 1px solid var(--line); color: var(--muted);
+    font-size: 11px; font-weight: 400; padding: 4px 9px; border-radius: 5px;
+  }
+  .rename-btn:hover { border-color: var(--gold); color: var(--gold); background: none; }
+  .profile-btn.named { font-size: 11px; width: auto; padding: 0 12px; }
+  .chip.profile { color: var(--gold); }
+  .chip.cat { font-weight: 500; }
+  .color-row {
+    display: flex; align-items: center; gap: 10px; padding: 8px 2px;
+    border-bottom: 1px solid var(--line);
+  }
+  .color-row:last-child { border-bottom: none; }
+  .color-row .cr-name { flex: 1; font-size: 13px; font-weight: 500; }
+  .color-row .cr-bar { width: 4px; height: 22px; border-radius: 2px; flex-shrink: 0; }
+  .bulk-area {
+    width: 100%; min-height: 160px; font-family: var(--mono); font-size: 12.5px; line-height: 1.5;
+  }
+  .bulk-report { font-size: 12.5px; margin-top: 8px; line-height: 1.5; }
+  .bulk-report b.ok { color: var(--green); }
+  .bulk-report b.skip { color: var(--muted); }
+  .backup-row {
+    display: flex; align-items: center; gap: 10px; padding: 9px 2px;
+    border-bottom: 1px solid var(--line); font-size: 12.5px;
+  }
+  .backup-row:last-child { border-bottom: none; }
+  .backup-when { flex: 1; font-family: var(--mono); }
+  .backup-size { color: var(--muted); font-size: 11px; }
+  .backup-row button { width: auto; font-size: 11px; padding: 5px 10px; }
+  .theme-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
+  .theme-card {
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px;
+    padding: 10px; cursor: pointer; text-align: left; width: 100%;
+    color: var(--text); font-weight: 500; font-size: 12.5px;
+  }
+  .theme-card.selected { border-color: var(--gold); }
+  .theme-card:hover { border-color: var(--gold); background: var(--panel-2); }
+  .theme-swatches { display: flex; gap: 4px; margin-top: 8px; }
+  .theme-swatches i { width: 100%; height: 14px; border-radius: 3px; display: block; }
+  .theme-name { display: flex; align-items: center; gap: 6px; }
+  .theme-check { color: var(--gold); font-size: 12px; }
+  .color-row input[type="color"] {
+    width: 40px; height: 30px; padding: 2px; border-radius: 6px;
+    background: var(--panel-2); border: 1px solid var(--line); cursor: pointer;
+  }
+  .deal-card { border-left: 3px solid transparent; }
+  .stat-item { border-left: 3px solid transparent; }
+  .asset-card { border-left: 3px solid transparent; }
+  .g-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; border-radius: 4px; padding: 1px 6px; margin-left: 6px;
+    vertical-align: middle;
+  }
+  .g-m { background: #123047; color: #6fb3e0; }
+  .g-f { background: #401a2c; color: #e07aa8; }
+  .chip.g-m { color: #6fb3e0; background: var(--chip); }
+  .chip.g-f { color: #e07aa8; background: var(--chip); }
+</style>
+</head>
+<body>
+
+<div id="storage-banner" class="banner hidden"></div>
+<h1>Учёт перепродаж</h1>
+<p class="subtitle">Majestic RP · закупка и сбыт предметов
+  <span id="app-version" class="ver-tag"></span>
+  <span id="cloud-dot" class="cloud-dot" title="Синхронизация"></span>
+</p>
+
+<div class="maintabs">
+  <button class="maintab active" data-view="deals">Сделки</button>
+  <button class="maintab" data-view="history">История</button>
+  <button class="maintab" data-view="stats">Статистика</button>
+  <button class="maintab" data-view="products">Товары</button>
+  <button class="maintab" data-view="assets">Имущество</button>
+  <button class="maintab" data-view="settings">Настройки</button>
+</div>
+
+<!-- ===================== DEALS ===================== -->
+<div class="view active" id="view-deals">
+
+  <div class="profile-bar" id="profile-bar"></div>
+  <div class="profile-note" id="profile-note"></div>
+
+  <div class="cards">
+    <div class="card">
+      <div class="label">чистыми сегодня</div>
+      <div class="value" id="stat-today">—</div>
+      <div class="sub" id="stat-today-sub"></div>
+    </div>
+    <div class="card">
+      <div class="label">чистыми за неделю</div>
+      <div class="value" id="stat-week">—</div>
+      <div class="sub" id="stat-week-sub"></div>
+    </div>
+    <div class="card">
+      <div class="label">чистыми за месяц</div>
+      <div class="value" id="stat-month">—</div>
+      <div class="sub" id="stat-month-sub"></div>
+    </div>
+    <div class="card">
+      <div class="label">вложено на складе</div>
+      <div class="value neutral" id="stat-invested">—</div>
+      <div class="sub" id="stat-invested-sub"></div>
+    </div>
+  </div>
+
+  <form id="add-form">
+    <div class="form-title" id="form-mode-title">Новая сделка</div>
+
+    <div class="row full">
+      <div>
+        <label>Категория</label>
+        <select id="f-category"></select>
+      </div>
+    </div>
+
+    <div class="row full" id="wrap-product">
+      <div class="ac-wrap">
+        <label>Товар</label>
+        <input type="text" id="f-product" placeholder="Поиск по названию" autocomplete="off">
+        <div id="picked-product"></div>
+        <div class="ac-list" id="ac-list"></div>
+      </div>
+    </div>
+
+    <div class="row full hidden" id="wrap-freename">
+      <div>
+        <label>Название</label>
+        <input type="text" id="f-freename" placeholder="Впишите что угодно" autocomplete="off">
+      </div>
+    </div>
+
+    <div class="row full">
+      <div>
+        <label>Что сделал</label>
+        <select id="f-action">
+          <option value="Купил">Купил</option>
+          <option value="Продал">Продал</option>
+          <option value="Потратил">Потратил</option>
+          <option value="Получил">Получил</option>
+        </select>
+      </div>
+    </div>
+    <div class="hint" id="action-hint"></div>
+
+    <div class="row full" id="wrap-amount">
+      <div>
+        <label>Сумма сделки</label>
+        <input type="text" id="f-amount" inputmode="numeric" placeholder="0" autocomplete="off">
+      </div>
+    </div>
+
+    <div class="row hidden" id="wrap-unit">
+      <div>
+        <label>Цена за шт.</label>
+        <input type="text" id="f-price" inputmode="numeric" placeholder="0" autocomplete="off">
+      </div>
+      <div>
+        <label>Количество</label>
+        <input type="number" id="f-qty" min="1" step="1" value="1">
+      </div>
+    </div>
+
+    <div class="row full" id="wrap-extra">
+      <div>
+        <label>Доп. расходы (необязательно)</label>
+        <input type="text" id="f-extra" inputmode="numeric" placeholder="0" autocomplete="off">
+      </div>
+    </div>
+
+    <div class="row full">
+      <div>
+        <label>Дата и время сделки</label>
+        <input type="datetime-local" id="f-date">
+      </div>
+    </div>
+
+    <div class="row full">
+      <div>
+        <label>Комментарий</label>
+        <textarea id="f-comment" placeholder="Необязательно" rows="2"></textarea>
+      </div>
+    </div>
+
+    <div class="checkrow">
+      <input type="checkbox" id="f-cash">
+      <label for="f-cash">Наличка</label>
+    </div>
+
+    <div class="preview" id="preview"></div>
+    <div class="error" id="form-error"></div>
+    <div class="btn-row">
+      <button type="submit" id="submit-btn">+ Внести</button>
+      <button type="button" class="secondary hidden" id="cancel-edit">Отмена</button>
+    </div>
+  </form>
+
+  <div class="section-title">
+    <span>Склад · активные позиции</span>
+    <span id="inventory-count" style="font-size:11px;"></span>
+  </div>
+  <div class="listwrap" id="inventory-list"></div>
+  <div class="empty" id="inventory-empty" style="display:none;">На складе пусто. Внесите покупку — товар появится здесь и будет ждать продажи.</div>
+</div>
+
+<!-- ===================== HISTORY ===================== -->
+<div class="view" id="view-history">
+  <form onsubmit="return false;">
+    <div class="form-title">Фильтры</div>
+    <div class="row full">
+      <div>
+        <label>Поиск по названию</label>
+        <input type="text" id="h-search" placeholder="Например: Adibas" autocomplete="off">
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label>Категория</label>
+        <select id="h-category"></select>
+      </div>
+      <div>
+        <label>Тип сделки</label>
+        <select id="h-action">
+          <option value="">Все типы</option>
+          <option value="Купил">Купил</option>
+          <option value="Продал">Продал</option>
+          <option value="Потратил">Потратил</option>
+          <option value="Получил">Получил</option>
+        </select>
+      </div>
+    </div>
+    <div class="preview" id="h-summary"></div>
+    <button type="button" class="secondary" id="h-reset">Сбросить фильтры</button>
+  </form>
+
+  <div class="listwrap" id="history-list-full"></div>
+  <div class="empty" id="history-empty-full" style="display:none;">Ничего не найдено по этим фильтрам.</div>
+</div>
+
+<!-- ===================== STATS ===================== -->
+<div class="view" id="view-stats">
+  <div style="margin-bottom:14px;">
+    <label>Профиль</label>
+    <select id="stats-profile">
+      <option value="all">Все профили</option>
+    </select>
+  </div>
+
+  <div class="seg" id="stats-seg">
+    <button type="button" class="active" data-mode="items">По товарам</button>
+    <button type="button" data-mode="days">По дням</button>
+  </div>
+
+  <div id="stats-days-wrap" class="hidden">
+    <form onsubmit="return false;">
+      <div class="form-title">Период</div>
+      <div class="row">
+        <div>
+          <label>С даты</label>
+          <input type="date" id="d-from">
+        </div>
+        <div>
+          <label>По дату</label>
+          <input type="date" id="d-to">
+        </div>
+      </div>
+      <div class="preview" id="d-summary"></div>
+      <button type="button" class="secondary" id="d-reset">Показать все дни</button>
+    </form>
+    <div id="days-list"></div>
+    <div class="empty" id="days-empty" style="display:none;">За этот период продаж нет.</div>
+  </div>
+
+  <div id="stats-items-wrap">
+  <form onsubmit="return false;">
+    <div class="form-title">Фильтры</div>
+    <div class="row full">
+      <div>
+        <label>Поиск по названию</label>
+        <input type="text" id="s-search" placeholder="Например: Adibas" autocomplete="off">
+      </div>
+    </div>
+    <div class="row full">
+      <div>
+        <label>Категория</label>
+        <select id="s-category"></select>
+      </div>
+    </div>
+  </form>
+
+  <div id="stats-list"></div>
+  <div class="empty" id="stats-empty" style="display:none;">Нет данных по товарам.</div>
+  </div>
+</div>
+
+<!-- ===================== PRODUCTS ===================== -->
+<div class="view" id="view-products">
+  <form id="new-product-form">
+    <button type="button" class="form-toggle" id="np-toggle">
+      <span>+ Создать товар</span>
+      <span class="ft-arrow" id="np-arrow">▾</span>
+    </button>
+    <div id="np-body" class="hidden" style="margin-top:12px;">
+    <div class="row full">
+      <div>
+        <label>Вид товара</label>
+        <select id="np-category"></select>
+      </div>
+    </div>
+    <div class="row full hidden" id="np-gender-wrap">
+      <div>
+        <label>Пол</label>
+        <select id="np-gender">
+          <option value="m">Мужское ♂</option>
+          <option value="f">Женское ♀</option>
+          <option value="">Унисекс</option>
+        </select>
+      </div>
+    </div>
+    <div class="row full">
+      <div>
+        <label id="np-name-label">Название товара</label>
+        <input type="text" id="np-variation" placeholder="Например: Автопилот" autocomplete="off">
+      </div>
+    </div>
+    <label>Фото</label>
+    <div class="dropzone" id="np-zone">Вставьте <b>Ctrl+V</b>, перетащите файл или нажмите для выбора</div>
+    <div class="file-row">
+      <input type="file" accept="image/*" id="np-file" class="hidden">
+      <img class="thumb-preview" id="np-thumb" style="display:none;">
+    </div>
+    <div class="hint" id="np-hint"></div>
+    <div class="error" id="product-form-error"></div>
+    <button type="submit">Создать карточку товара</button>
+    </div>
+  </form>
+
+  <div class="btn-row" style="margin-bottom:14px;">
+    <button type="button" class="secondary" id="btn-bulk">Добавить списком</button>
+    <button type="button" class="secondary" id="btn-cat-export">Экспорт каталога</button>
+    <button type="button" class="secondary" id="btn-cat-import">Импорт каталога</button>
+  </div>
+  <input type="file" accept="application/json,.json,.txt,.csv" id="cat-import-file" class="hidden">
+
+  <div class="section-title">Каталог товаров</div>
+  <form onsubmit="return false;" style="padding:10px 14px;">
+    <div class="row">
+      <div>
+        <label>Поиск</label>
+        <input type="text" id="p-search" placeholder="Название товара" autocomplete="off">
+      </div>
+      <div>
+        <label>Вид товара</label>
+        <select id="p-filter-cat"></select>
+      </div>
+    </div>
+  </form>
+  <div id="products-list"></div>
+  <div class="empty" id="products-empty" style="display:none;">Ничего не найдено.</div>
+</div>
+
+<!-- ===================== SETTINGS ===================== -->
+<div class="view" id="view-settings">
+  <form onsubmit="return false;">
+    <div class="form-title">Оформление</div>
+    <div class="theme-grid" id="theme-list"></div>
+  </form>
+
+  <form onsubmit="return false;">
+    <div class="form-title">Категория по умолчанию для профиля</div>
+    <div id="profcat-list"></div>
+    <div class="hint" style="margin-top:8px;">При переключении на профиль и после каждой сделки эта категория подставится в форму автоматически.</div>
+  </form>
+
+  <form onsubmit="return false;">
+    <div class="form-title">Цвета типов сделок</div>
+    <div id="action-color-list"></div>
+    <div class="btn-row" style="margin-top:12px;">
+      <button type="button" class="secondary" id="action-colors-reset">Вернуть стандартные</button>
+    </div>
+  </form>
+
+  <form onsubmit="return false;">
+    <div class="form-title">Цвета категорий</div>
+    <div id="color-list"></div>
+    <div class="btn-row" style="margin-top:12px;">
+      <button type="button" class="secondary" id="colors-reset">Вернуть стандартные цвета</button>
+    </div>
+  </form>
+
+  <form onsubmit="return false;">
+    <div class="form-title">Данные</div>
+    <div class="btn-row">
+      <button type="button" class="secondary" id="btn-export">Скачать резервную копию</button>
+      <button type="button" class="secondary" id="btn-import">Загрузить копию</button>
+    </div>
+    <input type="file" accept="application/json" id="import-file" class="hidden">
+    <div class="hint" id="store-info" style="margin-top:8px;"></div>
+  </form>
+
+  <form onsubmit="return false;">
+    <div class="form-title">Синхронизация между устройствами</div>
+    <div class="hint" style="margin-bottom:10px;">
+      Сделки, товары и имущество хранятся в общей базе — открывайте программу с любого устройства и видите одно и то же.
+    </div>
+    <div class="checkrow">
+      <input type="checkbox" id="cloud-toggle" checked>
+      <label for="cloud-toggle">Включить синхронизацию</label>
+    </div>
+    <div class="btn-row">
+      <button type="button" class="secondary" id="btn-cloud-push">Отправить в облако</button>
+      <button type="button" class="secondary" id="btn-cloud-pull">Загрузить из облака</button>
+    </div>
+    <div class="diag-out" id="cloud-status" style="margin-top:8px;"></div>
+  </form>
+
+  <form onsubmit="return false;">
+    <div class="form-title">Файл данных</div>
+    <div class="hint" id="datafile-hint" style="margin-bottom:10px;"></div>
+    <div class="btn-row">
+      <button type="button" class="secondary" id="btn-openfile">Открыть файл данных</button>
+      <button type="button" class="secondary" id="btn-newfile">Создать файл данных</button>
+    </div>
+    <div class="btn-row" style="margin-top:8px;">
+      <button type="button" class="secondary hidden" id="btn-detachfile">Отключить файл</button>
+    </div>
+    <div class="hint" id="datafile-status" style="margin-top:8px;"></div>
+  </form>
+
+  <form onsubmit="return false;">
+    <div class="form-title">Проверка хранилища</div>
+    <div class="hint" style="margin-bottom:10px;">
+      Запишет пробное значение, прочитает обратно и покажет, какое хранилище работает.
+    </div>
+    <button type="button" class="secondary" id="btn-diag">Проверить</button>
+    <div class="diag-out" id="diag-out"></div>
+  </form>
+
+</div>
+
+<!-- ===================== ASSETS ===================== -->
+<div class="view" id="view-assets">
+  <div class="cards" style="grid-template-columns: repeat(2, 1fr);">
+    <div class="card">
+      <div class="label">потрачено всего</div>
+      <div class="value neutral" id="asset-total">—</div>
+      <div class="sub" id="asset-total-sub"></div>
+    </div>
+    <div class="card">
+      <div class="label">реальная оценка</div>
+      <div class="value neutral" id="asset-value">—</div>
+      <div class="sub" id="asset-value-sub"></div>
+    </div>
+    <div class="card">
+      <div class="label">разница</div>
+      <div class="value" id="asset-diff">—</div>
+      <div class="sub" id="asset-diff-sub"></div>
+    </div>
+    <div class="card">
+      <div class="label">крупнейшая категория</div>
+      <div class="value neutral" id="asset-top" style="font-size:14px;">—</div>
+      <div class="sub" id="asset-top-sub"></div>
+    </div>
+  </div>
+
+  <form id="asset-form">
+    <div class="form-title" id="asset-form-title">Добавить имущество</div>
+    <div class="row full">
+      <div>
+        <label>Вид имущества</label>
+        <select id="a-category"></select>
+      </div>
+    </div>
+    <div class="row full">
+      <div>
+        <label>Название</label>
+        <input type="text" id="a-name" placeholder="Например: Zentorno" autocomplete="off">
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label>Потрачено за шт.</label>
+        <input type="text" id="a-price" inputmode="numeric" placeholder="0" autocomplete="off">
+      </div>
+      <div>
+        <label>Реальная оценка за шт.</label>
+        <input type="text" id="a-value" inputmode="numeric" placeholder="0" autocomplete="off">
+      </div>
+    </div>
+    <div class="row full">
+      <div>
+        <label>Количество</label>
+        <input type="number" id="a-qty" min="1" step="1" value="1">
+      </div>
+    </div>
+    <label>Фото</label>
+    <div class="dropzone" id="a-zone">Вставьте <b>Ctrl+V</b>, перетащите файл или нажмите для выбора</div>
+    <div class="file-row">
+      <input type="file" accept="image/*" id="a-file" class="hidden">
+      <img class="thumb-preview" id="a-thumb" style="display:none;">
+    </div>
+    <div class="row full">
+      <div>
+        <label>Комментарий</label>
+        <textarea id="a-comment" rows="2" placeholder="Необязательно"></textarea>
+      </div>
+    </div>
+    <div class="preview" id="a-preview"></div>
+    <div class="error" id="a-error"></div>
+    <div class="btn-row">
+      <button type="submit" id="a-submit">+ Добавить</button>
+      <button type="button" class="secondary hidden" id="a-cancel">Отмена</button>
+    </div>
+  </form>
+
+  <form onsubmit="return false;" style="padding:10px 14px;">
+    <div class="row">
+      <div>
+        <label>Поиск</label>
+        <input type="text" id="a-search" placeholder="Название" autocomplete="off">
+      </div>
+      <div>
+        <label>Вид имущества</label>
+        <select id="a-filter-cat"></select>
+      </div>
+    </div>
+    <div class="preview" id="a-summary"></div>
+  </form>
+
+  <div id="assets-list"></div>
+  <div class="empty" id="assets-empty" style="display:none;">Пока пусто. Добавьте имущество выше.</div>
+</div>
+
+<script>
+const APP_VERSION = '1.3';
+const APP_BUILD_DATE = '04.09.26';
+const TX_KEY = 'flip-transactions-v3';
+const OLD_TX_KEY = 'flip-transactions-v2';
+const PROD_KEY = 'flip-products';
+const CATEGORIES = ['Транспорт','Предмет','Одежда','Бизнес','Недвижимость','Обвес','Винил','Диск','Номерной знак'];
+const OTHER = 'Другое';
+const ACTIONS = ['Купил','Продал','Потратил','Получил'];
+const POSITIVE_ACTIONS = ['Продал','Получил'];
+const HINTS = {
+  'Купил': 'Товар попадёт на склад. В дневной заработок покупка не идёт — прибыль посчитается в момент продажи.',
+  'Продал': 'Списывается со склада начиная с самой ранней покупки. В заработок пойдёт только чистая разница.',
+  'Потратил': 'Разовый расход. Сразу уменьшает заработок за день.',
+  'Получил': 'Разовый доход. Сразу увеличивает заработок за день.'
+};
+
+const PROFILES = [1, 2, 3, 4, 5];
+const PROFILE_KEY = 'flip-active-profile';
+const PROFILE_NAMES_KEY = 'flip-profile-names';
+let profileNames = {};
+const profileLabel = n => (profileNames[n] && profileNames[n].trim()) || ('Профиль ' + n);
+let activeProfile = 1;
+let transactions = [];
+let txStamp = 0;
+function invalidateTx() { txStamp++; soldMap = null; invCache = null; lotById = null; }
+let products = [];
+let selectedVariation = null;
+let editingId = null;
+
+const CAT_COLORS = {
+  'Транспорт':     '#5aa9e6',
+  'Предмет':       '#7bd88f',
+  'Одежда':        '#d98cc4',
+  'Бизнес':        '#e0a95a',
+  'Недвижимость':  '#c98b5e',
+  'Обвес':         '#8f9de0',
+  'Винил':         '#e07a7a',
+  'Диск':          '#6fd3d3',
+  'Номерной знак': '#c0c76a',
+  'Другое':        '#93a79c'
+};
+const THEME_KEY = 'flip-theme';
+const THEMES = {
+  forest: {
+    name: 'Лесная (по умолчанию)',
+    vars: {
+      '--bg': '#0d1210', '--panel': '#141a17', '--panel-2': '#1b2320', '--line': '#263129',
+      '--text': '#e8ece9', '--muted': '#8fa398', '--green': '#4fd68c', '--green-dim': '#2a5c42',
+      '--red': '#e05a5a', '--gold': '#d9b25c', '--blue': '#6fb3e0',
+      '--card-green': '#2d4f26', '--card-red': '#4f2626', '--card-blue': '#23394d', '--chip': '#1c1c1c'
+    }
+  },
+  midnight: {
+    name: 'Полночь',
+    vars: {
+      '--bg': '#0b0e14', '--panel': '#12161f', '--panel-2': '#181d29', '--line': '#242b3a',
+      '--text': '#e6e9f0', '--muted': '#8b93a7', '--green': '#5ad6a8', '--green-dim': '#1f5346',
+      '--red': '#e0657a', '--gold': '#7aa2f7', '--blue': '#7dd3fc',
+      '--card-green': '#1c4a3e', '--card-red': '#4a2230', '--card-blue': '#1e3350', '--chip': '#171b24'
+    }
+  },
+  graphite: {
+    name: 'Графит',
+    vars: {
+      '--bg': '#101010', '--panel': '#181818', '--panel-2': '#1f1f1f', '--line': '#2c2c2c',
+      '--text': '#ececec', '--muted': '#9a9a9a', '--green': '#63d68c', '--green-dim': '#2c5238',
+      '--red': '#e06a6a', '--gold': '#e0b050', '--blue': '#74b5e5',
+      '--card-green': '#2a4630', '--card-red': '#452828', '--card-blue': '#26374a', '--chip': '#242424'
+    }
+  },
+  plum: {
+    name: 'Слива',
+    vars: {
+      '--bg': '#120e16', '--panel': '#1a141f', '--panel-2': '#221a29', '--line': '#312438',
+      '--text': '#ece7f0', '--muted': '#a08fae', '--green': '#6ed6a8', '--green-dim': '#2c5347',
+      '--red': '#e0678f', '--gold': '#c58ce0', '--blue': '#8fa8e6',
+      '--card-green': '#26483c', '--card-red': '#4a2438', '--card-blue': '#2c2f52', '--chip': '#221c28'
+    }
+  },
+  copper: {
+    name: 'Медь',
+    vars: {
+      '--bg': '#14100c', '--panel': '#1c1712', '--panel-2': '#241d17', '--line': '#352b22',
+      '--text': '#f0e9e1', '--muted': '#a89a89', '--green': '#8fd07a', '--green-dim': '#3a5230',
+      '--red': '#e07a55', '--gold': '#e8a54f', '--blue': '#7fb8c4',
+      '--card-green': '#324a2a', '--card-red': '#4c2f22', '--card-blue': '#26414a', '--chip': '#241e18'
+    }
+  }
+};
+let activeTheme = 'forest';
+function applyTheme(key) {
+  const t = THEMES[key] || THEMES.forest;
+  const root = document.documentElement;
+  Object.entries(t.vars).forEach(([k, v]) => root.style.setProperty(k, v));
+  activeTheme = THEMES[key] ? key : 'forest';
+}
+
+const DEFCAT_KEY = 'flip-profile-categories';
+let profileCategories = {};
+const defaultCatFor = n => profileCategories[n] || 'Предмет';
+const ACTION_COLORS = {
+  'Купил':    '#6fb3e0',
+  'Продал':   '#4fd68c',
+  'Получил':  '#8fd07a',
+  'Потратил': '#e05a5a'
+};
+const ACTCOLORS_KEY = 'flip-action-colors';
+let actionColors = {};
+const actionColor = a => actionColors[a] || ACTION_COLORS[a] || '#8fa398';
+const actionChip = a => `<span class="chip" style="color:${actionColor(a)}">${escapeHtml(a)}</span>`;
+
+const COLORS_KEY = 'flip-cat-colors';
+let catColors = {};
+const catColor = c => catColors[c] || CAT_COLORS[c] || '#93a79c';
+const catChip = c => `<span class="chip cat" style="color:${catColor(c)}">${escapeHtml(c)}</span>`;
+
+const $ = id => document.getElementById(id);
+const fmt = n => Math.round(n).toLocaleString('ru-RU');
+const money = n => '$ ' + fmt(Math.abs(n));
+function groupDigits(str) {
+  return str.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+}
+function moneyVal(el) {
+  const digits = (el.value || '').replace(/\D/g, '');
+  return digits ? parseInt(digits, 10) : 0;
+}
+function setMoney(el, n) {
+  el.value = (n === null || n === undefined || n === '') ? '' : groupDigits(String(Math.round(n)));
+}
+function attachMoneyInput(el) {
+  el.addEventListener('input', () => {
+    const digits = (el.value || '').replace(/\D/g, '');
+    const atEnd = el.selectionStart === el.value.length;
+    const before = el.value;
+    const formatted = digits ? groupDigits(digits) : '';
+    if (formatted !== before) {
+      const posFromEnd = before.length - (el.selectionStart || 0);
+      el.value = formatted;
+      if (!atEnd) {
+        const pos = Math.max(0, formatted.length - posFromEnd);
+        el.setSelectionRange(pos, pos);
+      }
+    }
+  });
+}
+function nowLocalISO() {
+  const d = new Date();
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+}
+function escapeHtml(s) { const d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; }
+function fmtDate(iso) {
+  const d = new Date(iso), p = n => String(n).padStart(2, '0');
+  return `${p(d.getDate())}.${p(d.getMonth()+1)}.${String(d.getFullYear()).slice(2)} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+const isPositive = a => POSITIVE_ACTIONS.includes(a);
+
+/* ---------- tabs ---------- */
+document.querySelectorAll('.maintab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.maintab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    btn.classList.add('active');
+    $('view-' + btn.dataset.view).classList.add('active');
+    if (typeof renderAll === 'function') renderAll();
+  });
+});
+
+/* ---------- storage ---------- */
+async function loadAll() {
+  try {
+    const v = await readKey(TX_KEY);
+    transactions = v ? JSON.parse(v) : [];
+  } catch (e) { transactions = []; }
+  if (!transactions.length) {
+    try {
+      const v = await readKey(OLD_TX_KEY);
+      if (v) { transactions = JSON.parse(v); await saveTx(); }
+    } catch (e) {}
+  }
+  try {
+    const v = await readKey(PROD_KEY);
+    products = v ? JSON.parse(v) : [];
+  } catch (e) { products = []; }
+  migrateProducts();
+  await preloadImages();
+  await extractImages();
+  await stripTxImages();
+  try {
+    const v = await readKey(PROFILE_KEY);
+    if (v) activeProfile = v === 'all' ? 'all' : Number(v);
+  } catch (e) {}
+  try {
+    const v = await readKey(PROFILE_NAMES_KEY);
+    profileNames = v ? JSON.parse(v) : {};
+  } catch (e) { profileNames = {}; }
+  try {
+    const v = await readKey(COLORS_KEY);
+    catColors = v ? JSON.parse(v) : {};
+  } catch (e) { catColors = {}; }
+  try {
+    const v = await readKey(ACTCOLORS_KEY);
+    actionColors = v ? JSON.parse(v) : {};
+  } catch (e) { actionColors = {}; }
+  try {
+    const v = await readKey(DEFCAT_KEY);
+    profileCategories = v ? JSON.parse(v) : {};
+  } catch (e) { profileCategories = {}; }
+  try {
+    const v = await readKey(THEME_KEY);
+    let key = 'forest';
+    if (v) { try { key = JSON.parse(v); } catch (e) { key = v; } }
+    applyTheme(key);
+  } catch (e) { applyTheme('forest'); }
+  renderAll();
+  renderProducts();
+}
+/* ---------- cloud sync (Supabase) ---------- */
+const CLOUD_URL = 'https://ssrqhyibayborcxvxpzt.supabase.co';
+const CLOUD_KEY = 'sb_publishable_DXS3jRv4nEUiV1m5PFUgZw_uORTdyQ6';
+const CLOUD_TABLE = 'app_data';
+const DEVICE_KEY = 'flip-device-id';
+const SYNCED_KEYS = ['flip-transactions-v3', 'flip-products', 'flip-assets',
+                     'flip-profile-names', 'flip-cat-colors', 'flip-action-colors',
+                     'flip-profile-categories'];
+
+let cloudOn = true;
+let cloudState = 'idle';     // idle | syncing | ok | error
+let cloudMsg = '';
+let cloudPending = new Set();
+let cloudTimer = null;
+let lastPullAt = 0;
+
+function cloudHeaders() {
+  return {
+    'apikey': CLOUD_KEY,
+    'Authorization': 'Bearer ' + CLOUD_KEY,
+    'Content-Type': 'application/json',
+    'Prefer': 'resolution=merge-duplicates'
+  };
+}
+
+async function cloudPush(key, value) {
+  const body = JSON.stringify([{ key, value, updated_at: new Date().toISOString() }]);
+  const res = await fetch(`${CLOUD_URL}/rest/v1/${CLOUD_TABLE}`, {
+    method: 'POST', headers: cloudHeaders(), body
+  });
+  if (!res.ok) throw new Error('HTTP ' + res.status + ' ' + (await res.text()).slice(0, 120));
+}
+
+async function cloudPullAll() {
+  const res = await fetch(
+    `${CLOUD_URL}/rest/v1/${CLOUD_TABLE}?select=key,value,updated_at`,
+    { headers: { apikey: CLOUD_KEY, Authorization: 'Bearer ' + CLOUD_KEY } });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const rows = await res.json();
+  const map = {};
+  rows.forEach(r => { map[r.key] = r; });
+  return map;
+}
+
+function cloudValueFor(key) {
+  switch (key) {
+    case 'flip-transactions-v3': return transactions;
+    case 'flip-products': return products;
+    case 'flip-assets': return assets;
+    case 'flip-profile-names': return profileNames;
+    case 'flip-cat-colors': return catColors;
+    case 'flip-action-colors': return actionColors;
+    case 'flip-profile-categories': return profileCategories;
+    default: return null;
+  }
+}
+function cloudApply(key, value) {
+  switch (key) {
+    case 'flip-transactions-v3': transactions = value || []; break;
+    case 'flip-products': products = value || []; break;
+    case 'flip-assets': assets = value || []; break;
+    case 'flip-profile-names': profileNames = value || {}; break;
+    case 'flip-cat-colors': catColors = value || {}; break;
+    case 'flip-action-colors': actionColors = value || {}; break;
+    case 'flip-profile-categories': profileCategories = value || {}; break;
+  }
+}
+
+function markCloudDirty(key) {
+  if (!cloudOn || !SYNCED_KEYS.includes(key)) return;
+  cloudPending.add(key);
+  clearTimeout(cloudTimer);
+  cloudTimer = setTimeout(flushCloud, 1200);
+}
+
+async function flushCloud() {
+  if (!cloudOn || !cloudPending.size) return;
+  const keys = [...cloudPending];
+  cloudPending.clear();
+  cloudState = 'syncing';
+  renderCloudStatus();
+  try {
+    for (const key of keys) {
+      let value = cloudValueFor(key);
+      if (key === 'flip-products') value = { products, images: collectImages() };
+      if (key === 'flip-assets') value = { assets, images: collectImages() };
+      await cloudPush(key, value);
+    }
+    cloudState = 'ok';
+    cloudMsg = 'синхронизировано ' + new Date().toLocaleTimeString('ru-RU').slice(0, 5);
+  } catch (e) {
+    keys.forEach(k => cloudPending.add(k));
+    cloudState = 'error';
+    cloudMsg = String(e.message || e);
+  }
+  renderCloudStatus();
+}
+
+async function pullFromCloud(silent) {
+  if (!cloudOn) return;
+  cloudState = 'syncing';
+  renderCloudStatus();
+  try {
+    const map = await cloudPullAll();
+    let changed = false;
+    for (const key of SYNCED_KEYS) {
+      const row = map[key];
+      if (!row) continue;
+      let value = row.value;
+      if (key === 'flip-products' && value && value.products) {
+        await restoreImages(value.images || {});
+        value = value.products;
+      }
+      if (key === 'flip-assets' && value && value.assets) {
+        await restoreImages(value.images || {});
+        value = value.assets;
+      }
+      const local = JSON.stringify(cloudValueFor(key));
+      if (JSON.stringify(value) !== local) { cloudApply(key, value); changed = true; }
+    }
+    if (changed) {
+      migrateProducts();
+      await extractImages();
+      invalidateTx();
+      imageIndex = null;
+      await saveTx(true); await saveProducts(true); await saveAssets(true);
+      renderAll(); renderProducts(); renderAssets();
+      if (!silent) showBanner('Данные обновлены из облака.', true);
+    }
+    lastPullAt = Date.now();
+    cloudState = 'ok';
+    cloudMsg = 'синхронизировано ' + new Date().toLocaleTimeString('ru-RU').slice(0, 5);
+  } catch (e) {
+    cloudState = 'error';
+    cloudMsg = String(e.message || e);
+  }
+  renderCloudStatus();
+}
+
+function renderCloudStatus() {
+  const el = $('cloud-status');
+  if (!el) return;
+  const label = !cloudOn ? 'выключена'
+    : cloudState === 'syncing' ? 'синхронизация…'
+    : cloudState === 'error' ? 'ошибка: ' + escapeHtml(cloudMsg)
+    : cloudMsg || 'готово';
+  el.innerHTML = `Облако: <span class="${cloudState === 'error' ? 'bad' : cloudState === 'ok' ? 'ok' : ''}">${label}</span>` +
+    (cloudPending.size ? ` · ждут отправки: ${cloudPending.size}` : '');
+  const dot = $('cloud-dot');
+  if (dot) {
+    dot.style.background = !cloudOn ? 'var(--muted)'
+      : cloudState === 'error' ? 'var(--red)'
+      : cloudState === 'syncing' ? 'var(--gold)' : 'var(--green)';
+    dot.title = label;
+  }
+}
+
+/* ---------- storage adapter ---------- */
+const STAMP_PREFIX = 'stamp:';
+
+function mirrorStamp(key) {
+  try { return Number(localStorage.getItem(STAMP_PREFIX + key)) || 0; } catch (e) { return 0; }
+}
+function setMirrorStamp(key, t) {
+  try { localStorage.setItem(STAMP_PREFIX + key, String(t)); } catch (e) {}
+}
+
+/* Read the freshest copy. The browser mirror is written on every save and never
+   fails, so when it exists it is at least as new as the main store — a stale
+   main store must never win, or saved work looks lost after a reload. */
+async function readKey(key) {
+  let primary = null, primaryStamp = 0;
+  try {
+    const r = await Store.get(key, false);
+    if (r && r.value) primary = r.value;
+  } catch (e) {}
+  try {
+    const st = await Store.get(STAMP_PREFIX + key, false);
+    if (st && st.value) primaryStamp = Number(st.value) || 0;
+  } catch (e) {}
+
+  let mirror = null;
+  try { mirror = localStorage.getItem('mirror:' + key); } catch (e) {}
+  const mStamp = mirrorStamp(key);
+
+  if (!mirror) return primary;
+  if (!primary) return mirror;
+  if (mirror === primary) return primary;
+
+  /* both exist and differ — trust the newer write */
+  if (mStamp || primaryStamp) return mStamp >= primaryStamp ? mirror : primary;
+  return mirror;
+}
+
+
+const HostStore = (typeof window !== 'undefined' && window.storage) ? window.storage : null;
+const LocalStore = {
+  async get(key) { const v = localStorage.getItem(key); if (v === null) throw new Error('not found'); return { key, value: v }; },
+  async set(key, value) { localStorage.setItem(key, value); return { key, value }; },
+  async delete(key) { localStorage.removeItem(key); return { key, deleted: true }; }
+};
+const Store = HostStore || LocalStore;
+const STORE_MODE = HostStore ? 'host' : 'local';
+
+function showBanner(html, ok) {
+  const b = $('storage-banner');
+  b.className = 'banner' + (ok ? ' ok' : '');
+  b.innerHTML = html;
+  b.classList.remove('hidden');
+  if (ok) setTimeout(() => b.classList.add('hidden'), 4000);
+}
+function hideBanner() { $('storage-banner').classList.add('hidden'); }
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+function mirrorWrite(key, payload) {
+  try {
+    localStorage.setItem('mirror:' + key, payload);
+    localStorage.setItem(STAMP_PREFIX + key, String(Date.now()));
+  } catch (e) {}
+}
+function mirrorRead(key) {
+  try { return localStorage.getItem('mirror:' + key); } catch (e) { return null; }
+}
+
+let mirrorWorks = null;
+function checkMirror() {
+  if (mirrorWorks !== null) return mirrorWorks;
+  try {
+    localStorage.setItem('mirror:__probe', '1');
+    localStorage.removeItem('mirror:__probe');
+    mirrorWorks = true;
+  } catch (e) { mirrorWorks = false; }
+  return mirrorWorks;
+}
+
+const pendingSaves = new Map();   // key -> {value, label}
+let retryTimer = null;
+
+function scheduleRetry() {
+  if (retryTimer) return;
+  retryTimer = setInterval(async () => {
+    if (!pendingSaves.size) { clearInterval(retryTimer); retryTimer = null; return; }
+    for (const [key, rec] of [...pendingSaves]) {
+      const ok = await writeKey(key, JSON.stringify(rec.value));
+      if (ok) pendingSaves.delete(key);
+    }
+    if (!pendingSaves.size) {
+      clearInterval(retryTimer); retryTimer = null;
+      showBanner('Данные сохранены.', true);
+    }
+  }, 15000);
+}
+
+/* one write attempt, verified by reading the value back */
+async function writeKey(key, payload) {
+  const stamp = String(Date.now());
+  try {
+    await Store.set(key, payload, false);
+  } catch (e) {
+    /* the call threw — it may still have landed, so fall through to the read-back */
+  }
+  try {
+    const back = await Store.get(key, false);
+    if (back && back.value === payload) {
+      if (!key.startsWith(STAMP_PREFIX)) {
+        try { await Store.set(STAMP_PREFIX + key, stamp, false); } catch (e) {}
+      }
+      return true;
+    }
+  } catch (e) {}
+  return false;
+}
+
+async function safeSet(key, value, label) {
+  const payload = JSON.stringify(value);
+  const mirrored = checkMirror();
+  if (mirrored) mirrorWrite(key, payload);
+
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    if (await writeKey(key, payload)) {
+      pendingSaves.delete(key);
+      hideBanner();
+      return true;
+    }
+    if (attempt < 3) await sleep(300 * attempt);
+  }
+
+  /* the main store refused; keep trying quietly in the background */
+  pendingSaves.set(key, { value, label });
+  scheduleRetry();
+
+  if (mirrored) {
+    /* the browser copy holds the data and it reloads fine — no need to alarm */
+    return false;
+  } else {
+    showBanner(
+      `<b>Данные не сохраняются.</b> Ни основное хранилище, ни память браузера не отвечают — ` +
+      `после закрытия вкладки «${label}» пропадут.` +
+      `<br>Скачайте резервную копию в «Настройках» и откройте программу из файла на компьютере.` +
+      `<div><button type="button" id="retry-save">Повторить сейчас</button></div>`
+    );
+  }
+  const btn = $('retry-save');
+  if (btn) btn.addEventListener('click', () => safeSet(key, value, label));
+  return false;
+}
+
+window.addEventListener('beforeunload', e => {
+  if (pendingSaves.size && !checkMirror()) { e.preventDefault(); e.returnValue = ''; }
+});
+
+async function saveTx(fromCloud) {
+  invalidateTx();
+  const r = await safeSet(TX_KEY, transactions, 'сделки');
+  if (!fromCloud) markCloudDirty(TX_KEY);
+  if (typeof markFileDirty === 'function') markFileDirty();
+  if (typeof updateStoreInfo === 'function') updateStoreInfo();
+  return r;
+}
+/* ---------- images kept out of the main records ---------- */
+const IMG_PREFIX = 'flip-img:';
+const imageCache = new Map();      // imgId -> dataUrl
+const dirtyImages = new Set();     // imgIds written this session
+
+function newImageId() { return 'i' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+
+async function putImage(dataUrl) {
+  if (!dataUrl) return null;
+  const id = newImageId();
+  imageCache.set(id, dataUrl);
+  if (checkMirror()) mirrorWrite(IMG_PREFIX + id, dataUrl);
+  if (!(await writeKey(IMG_PREFIX + id, dataUrl))) dirtyImages.add(id);
+  return id;
+}
+function getImage(id) {
+  if (!id) return null;
+  if (imageCache.has(id)) return imageCache.get(id);
+  const v = mirrorRead(IMG_PREFIX + id);
+  if (v) { imageCache.set(id, v); return v; }
+  return null;
+}
+async function loadImage(id) {
+  if (!id || imageCache.has(id)) return imageCache.get(id) || null;
+  const v = await readKey(IMG_PREFIX + id);
+  if (v) imageCache.set(id, v);
+  return v || null;
+}
+async function deleteImage(id) {
+  if (!id) return;
+  imageCache.delete(id);
+  try { localStorage.removeItem('mirror:' + IMG_PREFIX + id); } catch (e) {}
+  try { if (Store.delete) await Store.delete(IMG_PREFIX + id, false); } catch (e) {}
+}
+/* a record can carry either a legacy inline dataUrl (image) or an id (imgId) */
+const imgOf = o => o ? (getImage(o.imgId) || o.image || null) : null;
+
+/* preload every referenced image once, so renders stay synchronous */
+async function preloadImages() {
+  const ids = new Set();
+  products.forEach(p => {
+    if (p.imgId) ids.add(p.imgId);
+    (p.colorways || []).forEach(c => { if (c.imgId) ids.add(c.imgId); });
+  });
+  assets.forEach(a => { if (a.imgId) ids.add(a.imgId); });
+  await Promise.all([...ids].map(loadImage));
+}
+
+/* move inline photos into their own records — runs once */
+async function extractImages() {
+  let changed = false;
+  for (const p of products) {
+    if (p.image && !p.imgId) { p.imgId = await putImage(p.image); p.image = null; changed = true; }
+    for (const c of (p.colorways || [])) {
+      if (c.image && !c.imgId) { c.imgId = await putImage(c.image); c.image = null; changed = true; }
+    }
+  }
+  if (changed) { imageIndex = null; await saveProducts(); }
+}
+async function extractAssetImages() {
+  let changed = false;
+  for (const a of assets) {
+    if (a.image && !a.imgId) { a.imgId = await putImage(a.image); a.image = null; changed = true; }
+  }
+  if (changed) await saveAssets();
+}
+
+async function saveProducts(fromCloud) {
+  imageIndex = null;
+  const r = await safeSet(PROD_KEY, products, 'каталог товаров');
+  if (!fromCloud) markCloudDirty(PROD_KEY);
+  if (typeof markFileDirty === 'function') markFileDirty();
+  return r;
+}
+
+/* ---------- profiles ---------- */
+const isAllProfiles = () => activeProfile === 'all';
+const profileOf = t => t.profileId || 1;
+function scoped() {
+  return isAllProfiles() ? transactions : transactions.filter(t => profileOf(t) === activeProfile);
+}
+function refreshProfileSelects() {
+  const sel = $('stats-profile');
+  const cur = sel.value || 'all';
+  sel.innerHTML = '<option value="all">Все профили</option>' +
+    PROFILES.map(n => `<option value="${n}">${escapeHtml(profileLabel(n))}</option>`).join('');
+  sel.value = cur;
+}
+function echoesCategory(label, cat) {
+  const a = String(label).toLowerCase().trim();
+  const b = String(cat).toLowerCase().trim();
+  const stem = x => x.slice(0, Math.max(4, x.length - 2));
+  return a === b || a.startsWith(stem(b)) || b.startsWith(stem(a));
+}
+function statsScoped() {
+  const v = $('stats-profile').value;
+  return v === 'all' ? transactions : transactions.filter(t => profileOf(t) === Number(v));
+}
+function statsIsAll() { return $('stats-profile').value === 'all'; }
+function renderProfileBar() {
+  const bar = $('profile-bar');
+  bar.innerHTML = PROFILES.map(n => {
+    const used = transactions.some(t => profileOf(t) === n);
+    const named = !!(profileNames[n] && profileNames[n].trim());
+    const label = named ? escapeHtml(profileNames[n].trim()) : n;
+    return `<button type="button" class="profile-btn${activeProfile === n ? ' active' : ''}${named ? ' named' : ''}" data-profile="${n}" title="${escapeHtml(profileLabel(n))}">${label}${used ? '<span class="pb-dot"></span>' : ''}</button>`;
+  }).join('') +
+  `<button type="button" class="profile-btn all${isAllProfiles() ? ' active' : ''}" data-profile="all">Все профили</button>`;
+
+  bar.querySelectorAll('.profile-btn').forEach(b => b.addEventListener('click', async () => {
+    const v = b.dataset.profile;
+    activeProfile = v === 'all' ? 'all' : Number(v);
+    resetForm();
+    applyProfileDefaultCategory();
+    if (checkMirror()) mirrorWrite(PROFILE_KEY, String(activeProfile));
+    await writeKey(PROFILE_KEY, String(activeProfile));
+    renderAll();
+  }));
+
+  const isAll = isAllProfiles();
+  $('add-form').classList.toggle('hidden', isAll);
+  const note = $('profile-note');
+  if (isAll) {
+    note.innerHTML = 'Сводка по всем профилям. Чтобы внести сделку, выберите профиль.';
+  } else {
+    note.innerHTML = `<span class="profile-title">${escapeHtml(profileLabel(activeProfile))}</span>
+      <span>свой склад и своя статистика</span>
+      <button type="button" class="rename-btn" id="rename-profile">Переименовать</button>`;
+    $('rename-profile').addEventListener('click', openProfileRename);
+  }
+}
+
+function openProfileRename() {
+  const n = activeProfile;
+  const f = openModal('Название профиля', `
+    <label>Как назвать профиль ${n}</label>
+    <input type="text" class="pn-input" placeholder="Например: Одежда" maxlength="24" value="${escapeHtml(profileNames[n] || '')}">
+    <div class="hint" style="margin-top:6px;">Оставьте пустым, чтобы вернуть «Профиль ${n}».</div>
+    <div class="btn-row" style="margin-top:10px;">
+      <button type="button" class="pn-save">Сохранить</button>
+      <button type="button" class="secondary pn-cancel">Отмена</button>
+    </div>`);
+  const input = f.querySelector('.pn-input');
+  input.focus();
+  input.select();
+  const save = async () => {
+    const v = input.value.trim();
+    if (v) profileNames[n] = v; else delete profileNames[n];
+    await saveProfileNames();
+    closeModal();
+    renderAll();
+  };
+  f.querySelector('.pn-save').addEventListener('click', save);
+  f.querySelector('.pn-cancel').addEventListener('click', closeModal);
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') save(); });
+}
+
+function recompress(dataUrl, maxSize) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      let w = img.width, h = img.height;
+      if (w > h && w > maxSize) { h = Math.round(h * maxSize / w); w = maxSize; }
+      else if (h > maxSize) { w = Math.round(w * maxSize / h); h = maxSize; }
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      resolve(c.toDataURL('image/jpeg', 0.6));
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+const BIG = 20000;
+/* transactions used to carry a copy of the photo — drop it, the catalog has it */
+async function stripTxImages() {
+  buildImageIndex();
+  let txChanged = false;
+  /* older records were saved before the item had a gender — adopt it when unambiguous */
+  for (const t of transactions) {
+    if (t.gender || t.category === OTHER) continue;
+    const hit = resolveEntry(t.category, t.name);
+    if (hit && hit.gender) { t.gender = hit.gender; txChanged = true; }
+  }
+  for (const t of transactions) {
+    if (!t.image) continue;
+    if (findImageByName(t.category, t.name, t.gender)) { t.image = null; txChanged = true; }
+    else if (t.image.length > BIG) { t.image = await recompress(t.image, 160); txChanged = true; }
+  }
+  let prodChanged = false;
+  for (const p of products) {
+    if (p.image && p.image.length > BIG) { p.image = await recompress(p.image, 160); prodChanged = true; }
+    for (const c of (p.colorways || [])) {
+      if (c.image && c.image.length > BIG) { c.image = await recompress(c.image, 160); prodChanged = true; }
+    }
+  }
+  if (prodChanged) { buildImageIndex(); await saveProducts(); }
+  if (txChanged) await saveTx();
+}
+
+/* ---------- inventory (FIFO lots) ---------- */
+let soldMap = null;
+function buildSoldMap() {
+  soldMap = new Map();
+  for (const t of transactions) {
+    if (t.action === 'Продал' && t.lotId) soldMap.set(t.lotId, (soldMap.get(t.lotId) || 0) + t.qty);
+  }
+}
+function soldQtyForLot(lotId) {
+  if (!soldMap) buildSoldMap();
+  return soldMap.get(lotId) || 0;
+}
+function buyLots() {
+  return scoped().filter(t => t.action === 'Купил')
+    .sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id);
+}
+let invCache = null, invCacheKey = null;
+function inventory() {
+  const key = String(activeProfile) + ':' + transactions.length + ':' + txStamp;
+  if (invCache && invCacheKey === key) return invCache;
+  if (!soldMap) buildSoldMap();
+  invCache = buyLots().map(lot => {
+    const sold = soldQtyForLot(lot.id);
+    return { lot, sold, remaining: lot.qty - sold };
+  }).filter(x => x.remaining > 0);
+  invCacheKey = key;
+  return invCache;
+}
+function statsInventory() {
+  if (!soldMap) buildSoldMap();
+  return statsScoped().filter(t => t.action === 'Купил')
+    .sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id)
+    .map(lot => {
+      const sold = soldQtyForLot(lot.id);
+      return { lot, sold, remaining: lot.qty - sold };
+    }).filter(x => x.remaining > 0);
+}
+const extrasSum = lot => (lot.extras || []).reduce((s, e) => s + (e.amount || 0), 0);
+const unitCost = lot => lot.qty ? (lot.price * lot.qty + extrasSum(lot)) / lot.qty : lot.price;
+
+function investedTotal() {
+  return inventory().reduce((s, x) => s + x.remaining * unitCost(x.lot), 0);
+}
+/* pick oldest open lot matching name+category */
+function findOpenLot(category, name, gender) {
+  const target = { category, name, gender: gender || null };
+  return inventory().find(x => sameItem(x.lot, target)) || null;
+}
+let lotById = null;
+function costBasisOf(t) {
+  if (t.action !== 'Продал') return 0;
+  if (!lotById) { lotById = new Map(); transactions.forEach(x => lotById.set(x.id, x)); }
+  const lot = t.lotId ? lotById.get(t.lotId) : null;
+  if (lot) return unitCost(lot) * t.qty;
+  return t.costBasis != null ? t.costBasis : 0;
+}
+/* realized effect on daily profit */
+function realizedOf(t) {
+  if (t.action === 'Купил') return 0;
+  if (t.action === 'Продал') return t.total - costBasisOf(t);
+  if (t.action === 'Получил') return t.total;
+  return -t.total;
+}
+
+/* ---------- form ---------- */
+const catSelect = $('f-category');
+catSelect.innerHTML = [...CATEGORIES, OTHER].map(c => `<option value="${c}">${c}</option>`).join('');
+catSelect.value = 'Предмет';
+$('f-date').value = nowLocalISO();
+
+function applyCategoryUI() {
+  const cat = catSelect.value;
+  const isOther = cat === OTHER;
+  const isItem = cat === 'Предмет';
+  $('wrap-product').classList.toggle('hidden', isOther);
+  $('wrap-freename').classList.toggle('hidden', !isOther);
+  $('wrap-unit').classList.toggle('hidden', !isItem);
+  $('wrap-amount').classList.toggle('hidden', isItem);
+  updatePreview();
+}
+catSelect.addEventListener('change', () => {
+  $('f-product').value = '';
+  selectedVariation = null;
+  applyCategoryUI();
+  renderPicked();
+});
+function applyActionUI() {
+  const sel = $('f-action');
+  $('wrap-extra').classList.toggle('hidden', sel.value !== 'Купил');
+  sel.classList.remove('act-pos', 'act-neg');
+  sel.style.color = actionColor(sel.value);
+  sel.style.fontWeight = '600';
+  $('action-hint').textContent = HINTS[sel.value] || '';
+  updatePreview();
+}
+$('f-action').addEventListener('change', applyActionUI);
+
+function currentTotal() {
+  if (catSelect.value === 'Предмет') {
+    const p = moneyVal($('f-price'));
+    const q = parseInt($('f-qty').value) || 0;
+    return { total: p * q, price: p, qty: q };
+  }
+  const a = moneyVal($('f-amount'));
+  return { total: a, price: a, qty: 1 };
+}
+function updatePreview() {
+  const { total, price, qty } = currentTotal();
+  const action = $('f-action').value;
+  const el = $('preview');
+  if (!(total > 0)) { el.textContent = ''; return; }
+  if (action === 'Купил') {
+    const ex = moneyVal($('f-extra'));
+    el.innerHTML = ex
+      ? `На склад: ${money(total)} + доп. ${money(ex)} = <b>${money(total + ex)}</b> · ${money((total + ex) / (qty || 1))}/шт`
+      : `На склад: ${money(total)} (${qty} шт.)`;
+    return;
+  }
+  if (action === 'Продал') {
+    const name = catSelect.value === OTHER ? $('f-freename').value.trim() : $('f-product').value.trim();
+    const lot = name ? findOpenLot(catSelect.value, name, selectedVariation ? selectedVariation.gender : null) : null;
+    if (lot) {
+      const take = Math.min(qty, lot.remaining);
+      const profit = price * take - unitCost(lot.lot) * take;
+      el.innerHTML = `Закуп ${money(unitCost(lot.lot))}/шт · чистыми: <b class="${profit >= 0 ? 'pos' : 'neg'}">${profit >= 0 ? '+' : '−'} ${money(profit)}</b>`;
+    } else {
+      el.innerHTML = `Нет на складе — зачтётся целиком: <b class="pos">+ ${money(total)}</b>`;
+    }
+    return;
+  }
+  const pos = action === 'Получил';
+  el.innerHTML = `Итог: <b class="${pos ? 'pos' : 'neg'}">${pos ? '+' : '−'} ${money(total)}</b>`;
+}
+attachMoneyInput($('f-amount'));
+attachMoneyInput($('f-price'));
+attachMoneyInput($('f-extra'));
+$('f-extra').addEventListener('input', updatePreview);
+['f-amount','f-price','f-qty'].forEach(id => $(id).addEventListener('input', updatePreview));
+$('f-freename').addEventListener('input', updatePreview);
+applyCategoryUI();
+applyActionUI();
+
+/* ---------- autocomplete ---------- */
+const fProduct = $('f-product');
+const acList = $('ac-list');
+function variationsInCategory(cat) { return entriesInCategory(cat); }
+function matchVariations(query) {
+  const pool = variationsInCategory(catSelect.value);
+  const q = query.trim().toLowerCase();
+  const sorted = [...pool].sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+  if (!q) return sorted;
+  const words = q.split(/\s+/).filter(Boolean);
+  return sorted.filter(v => {
+    const n = (v.name + ' ' + (v.gender ? GENDER_WORD[v.gender] + ' ' + GENDER_SYMBOL[v.gender] : 'унисекс')).toLowerCase();
+    return words.every(w => n.includes(w));
+  });
+}
+let pendingRevert = null;
+function renderPicked() {
+  const box = $('picked-product');
+  if (!box) return;
+  const name = fProduct.value.trim();
+  const entry = (name && catSelect.value !== OTHER)
+    ? (selectedVariation || resolveEntry(catSelect.value, name))
+    : null;
+
+  if (!entry) {
+    box.innerHTML = '';
+    fProduct.classList.remove('hidden');
+    return;
+  }
+
+  const img = entry.image || findImageByName(entry.category, entry.name, entry.gender);
+  fProduct.classList.add('hidden');
+  box.innerHTML = `
+    <div class="picked" id="picked-row">
+      ${img ? `<img src="${img}">` : `<div class="picked-noimg">—</div>`}
+      <div class="picked-text">
+        ${escapeHtml(entry.name)}${genderBadge(entry.gender)}
+        <div class="picked-sub">${escapeHtml(entry.category)} · нажмите, чтобы выбрать другой</div>
+      </div>
+      <button type="button" class="picked-clear" id="picked-clear" aria-label="Очистить">✕</button>
+    </div>`;
+
+  $('picked-row').addEventListener('click', e => {
+    if (e.target.id === 'picked-clear') return;
+    /* remember the pick — if nothing new is chosen, it comes back on blur */
+    pendingRevert = { name: fProduct.value, entry: selectedVariation || entry };
+    fProduct.classList.remove('hidden');
+    box.innerHTML = '';
+    fProduct.value = '';
+    selectedVariation = null;
+    fProduct.focus();
+    renderAcList(matchVariations(''));
+    updatePreview();
+  });
+  $('picked-clear').addEventListener('click', e => {
+    e.stopPropagation();
+    pendingRevert = null;
+    fProduct.value = '';
+    selectedVariation = null;
+    fProduct.classList.remove('hidden');
+    box.innerHTML = '';
+    fProduct.focus();
+    updatePreview();
+  });
+}
+
+function createRowHtml(name) {
+  return `
+    <div class="ac-create" id="ac-create">
+      <div class="ac-plus">+</div>
+      <div class="ac-create-text">
+        Создать <b>${escapeHtml(name)}</b>
+        <div class="ac-create-sub">${escapeHtml(catSelect.value)}</div>
+      </div>
+    </div>`;
+}
+
+function wireCreateRow() {
+  const row = $('ac-create');
+  if (!row) return;
+  row.addEventListener('mousedown', ev => {
+    ev.preventDefault();
+    acList.style.display = 'none';
+    openQuickCreate(fProduct.value.trim());
+  });
+}
+
+function renderAcList(matches) {
+  const typed = fProduct.value.trim();
+  const canCreate = typed && catSelect.value !== OTHER && !resolveEntry(catSelect.value, typed);
+
+  if (!matches.length) {
+    acList.innerHTML =
+      (canCreate ? '' : `<div class="ac-none">Ничего не найдено в категории «${escapeHtml(catSelect.value)}»</div>`) +
+      (canCreate ? createRowHtml(typed) : '');
+    acList.style.display = 'block';
+    wireCreateRow();
+    return;
+  }
+  const MAXSHOW = 60;
+  const view = matches.slice(0, MAXSHOW);
+  acList.innerHTML = view.map(v => `
+    <div class="ac-item" data-id="${v.id}">
+      ${v.image ? `<img class="ac-thumb" src="${v.image}">` : `<div class="ac-thumb empty">—</div>`}
+      <div class="ac-text">${escapeHtml(v.name)}${genderBadge(v.gender)}</div>
+    </div>`).join('') +
+    (matches.length > MAXSHOW
+      ? `<div class="ac-count">Показано ${MAXSHOW} из ${matches.length} — уточните поиск</div>`
+      : (matches.length > 6 ? `<div class="ac-count">Найдено: ${matches.length}</div>` : '')) +
+    (canCreate ? createRowHtml(typed) : '');
+  acList.style.display = 'block';
+  acList.scrollTop = 0;
+  acList.querySelectorAll('.ac-item').forEach(item => {
+    item.addEventListener('mousedown', ev => {
+      ev.preventDefault();
+      const v = view.find(m => String(m.id) === item.dataset.id);
+      if (v) { fProduct.value = v.name; selectedVariation = v; }
+      pendingRevert = null;
+      acList.style.display = 'none';
+      renderPicked();
+      updatePreview();
+    });
+  });
+  wireCreateRow();
+}
+
+/* create a catalog card without leaving the deal form */
+function openQuickCreate(name) {
+  const cat = catSelect.value;
+  const cw = hasColorways(cat);
+  const existingClothing = cw ? products.filter(p => p.category === cat) : [];
+
+  const f = openModal('Новый товар', `
+    <div class="hint" style="margin-bottom:10px;">Товар появится в каталоге и сразу подставится в сделку.</div>
+    <label>Название</label>
+    <input type="text" class="qc-name" value="${escapeHtml(name)}" style="margin-bottom:8px;">
+    <label>Вид товара</label>
+    <select class="qc-cat" style="margin-bottom:8px;">
+      ${CATEGORIES.map(c => `<option value="${c}"${c === cat ? ' selected' : ''}>${c}</option>`).join('')}
+    </select>
+
+    <div class="qc-gender-wrap${cw ? '' : ' hidden'}">
+      <label>Пол</label>
+      <select class="qc-gender" style="margin-bottom:8px;">
+        <option value="m">Мужское ♂</option>
+        <option value="f">Женское ♀</option>
+        <option value="">Унисекс</option>
+      </select>
+    </div>
+
+    <div class="qc-attach-wrap${cw && existingClothing.length ? '' : ' hidden'}">
+      <label>Куда добавить</label>
+      <select class="qc-attach" style="margin-bottom:8px;">
+        <option value="">Новой карточкой товара</option>
+        ${existingClothing.map(p =>
+          `<option value="${p.id}">Расцветкой к «${escapeHtml(p.name)}»${p.gender ? ' ' + GENDER_SYMBOL[p.gender] : ''}</option>`).join('')}
+      </select>
+    </div>
+
+    <label>Фото (необязательно)</label>
+    <div class="dropzone qc-zone">Вставьте <b>Ctrl+V</b>, перетащите файл или нажмите для выбора</div>
+    <div class="file-row">
+      <input type="file" accept="image/*" class="qc-file hidden">
+      <img class="thumb-preview qc-thumb" style="display:none;">
+    </div>
+
+    <div class="error qc-error"></div>
+    <div class="btn-row" style="margin-top:10px;">
+      <button type="button" class="qc-save">Создать и выбрать</button>
+      <button type="button" class="secondary qc-cancel">Отмена</button>
+    </div>`);
+
+  const catEl = f.querySelector('.qc-cat');
+  const attachSel = f.querySelector('.qc-attach');
+  let pendingImage = null;
+
+  const syncUI = () => {
+    const isCw = hasColorways(catEl.value);
+    const list = isCw ? products.filter(p => p.category === catEl.value) : [];
+    f.querySelector('.qc-gender-wrap').classList.toggle('hidden', !isCw);
+    const wrap = f.querySelector('.qc-attach-wrap');
+    wrap.classList.toggle('hidden', !isCw || !list.length);
+    if (isCw) {
+      attachSel.innerHTML = '<option value="">Новой карточкой товара</option>' +
+        list.map(p => `<option value="${p.id}">Расцветкой к «${escapeHtml(p.name)}»${p.gender ? ' ' + GENDER_SYMBOL[p.gender] : ''}</option>`).join('');
+    }
+  };
+  catEl.addEventListener('change', syncUI);
+
+  attachImageInput(f.querySelector('.qc-zone'), f.querySelector('.qc-file'), data => {
+    pendingImage = data;
+    const t = f.querySelector('.qc-thumb');
+    t.src = data; t.style.display = 'block';
+    f.querySelector('.qc-zone').textContent = 'Фото добавлено — вставьте другое, чтобы заменить';
+  });
+
+  f.querySelector('.qc-cancel').addEventListener('click', closeModal);
+  f.querySelector('.qc-name').focus();
+  f.querySelector('.qc-name').select();
+
+  f.querySelector('.qc-save').addEventListener('click', async () => {
+    const errEl = f.querySelector('.qc-error');
+    const newName = f.querySelector('.qc-name').value.trim();
+    const newCat = catEl.value;
+    const isCw = hasColorways(newCat);
+    const gender = isCw ? (f.querySelector('.qc-gender').value || null) : null;
+    if (!newName) { errEl.textContent = 'Введите название'; errEl.style.display = 'block'; return; }
+
+    const attachTo = isCw && attachSel && !f.querySelector('.qc-attach-wrap').classList.contains('hidden')
+      ? attachSel.value : '';
+
+    if (!attachTo && productExists(newCat, newName, gender)) {
+      errEl.textContent = 'Такой товар уже есть в каталоге';
+      errEl.style.display = 'block';
+      return;
+    }
+    errEl.style.display = 'none';
+
+    const imgId = await putImage(pendingImage);
+    let entry;
+
+    if (attachTo) {
+      const owner = products.find(p => p.id === Number(attachTo));
+      if (!owner.colorways) owner.colorways = [];
+      const cwId = Date.now();
+      owner.colorways.push({ id: cwId, name: newName, image: null, imgId });
+      if (!owner.imgId && imgId) owner.imgId = imgId;
+      entry = { id: cwId, name: newName, image: pendingImage, category: owner.category, gender: owner.gender || null };
+    } else {
+      const id = Date.now();
+      products.push({
+        id, category: newCat, name: newName, image: null, imgId, gender,
+        colorways: isCw ? [{ id: id + 1, name: newName, image: null, imgId }] : []
+      });
+      entry = { id, name: newName, image: pendingImage, category: newCat, gender };
+    }
+
+    imageIndex = null;
+    await saveProducts();
+    closeModal();
+
+    catSelect.value = entry.category;
+    applyCategoryUI();
+    fProduct.value = entry.name;
+    selectedVariation = entry;
+    pendingRevert = null;
+    renderPicked();
+    updatePreview();
+    renderProducts();
+  });
+}
+
+fProduct.addEventListener('input', () => {
+  if (fProduct.value.trim()) pendingRevert = null;
+  selectedVariation = null;
+  renderAcList(matchVariations(fProduct.value));
+  renderPicked();
+  updatePreview();
+});
+fProduct.addEventListener('focus', () => renderAcList(matchVariations(fProduct.value)));
+fProduct.addEventListener('blur', () => setTimeout(() => {
+  acList.style.display = 'none';
+  /* user opened the picker but chose nothing — restore the previous item */
+  if (pendingRevert && !fProduct.value.trim() && !selectedVariation) {
+    fProduct.value = pendingRevert.name;
+    selectedVariation = pendingRevert.entry;
+  }
+  pendingRevert = null;
+  renderPicked();
+  updatePreview();
+}, 150));
+
+let imageIndex = null;
+function buildImageIndex() {
+  imageIndex = new Map();
+  products.forEach(p => {
+    if (hasColorways(p.category)) {
+      (p.colorways || []).forEach(c => {
+        const src = imgOf(c);
+        if (!src) return;
+        imageIndex.set(p.category + '|' + c.name.toLowerCase() + '|' + (p.gender || ''), src);
+        const anyKey = p.category + '|' + c.name.toLowerCase() + '|*';
+        if (!imageIndex.has(anyKey)) imageIndex.set(anyKey, src);
+      });
+    } else if (imgOf(p)) {
+      const src = imgOf(p);
+      imageIndex.set(p.category + '|' + p.name.toLowerCase() + '|' + (p.gender || ''), src);
+      const anyKey = p.category + '|' + p.name.toLowerCase() + '|*';
+      if (!imageIndex.has(anyKey)) imageIndex.set(anyKey, src);
+    }
+  });
+}
+function findImageByName(cat, name, gender) {
+  if (!imageIndex) buildImageIndex();
+  const n = String(name).toLowerCase();
+  return imageIndex.get(cat + '|' + n + '|' + (gender || ''))
+      || imageIndex.get(cat + '|' + n + '|*')
+      || null;
+}
+/* find the catalog entry for a typed name; returns it only when unambiguous */
+function resolveEntry(cat, name) {
+  const n = String(name).trim().toLowerCase();
+  const hits = entriesInCategory(cat).filter(e => e.name.trim().toLowerCase() === n);
+  if (hits.length === 1) return hits[0];
+  return null;
+}
+/* transactions never store base64 — the catalog is the single source of images */
+const imageFor = t => t.image || findImageByName(t.category, t.name, t.gender);
+
+/* ---------- submit ---------- */
+$('add-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const errEl = $('form-error');
+  const cat = catSelect.value;
+  const isOther = cat === OTHER;
+  const isItem = cat === 'Предмет';
+  const name = isOther ? $('f-freename').value.trim() : fProduct.value.trim();
+  const action = $('f-action').value;
+  const date = $('f-date').value;
+  const { total, price, qty } = currentTotal();
+  const fail = m => { errEl.textContent = m; errEl.style.display = 'block'; };
+
+  if (!name) return fail(isOther ? 'Впишите название' : 'Выберите или впишите товар');
+  if (isItem && !(qty >= 1)) return fail('Количество должно быть не меньше 1');
+  if (!(total > 0)) return fail('Укажите сумму сделки');
+  if (!date) return fail('Укажите дату сделки');
+  errEl.style.display = 'none';
+
+  const existingRec = editingId ? transactions.find(t => t.id === editingId) : null;
+  if (!selectedVariation && !isOther) {
+    const hit = resolveEntry(cat, name);
+    if (hit) selectedVariation = hit;
+  }
+  const record = {
+    id: editingId || Date.now(),
+    profileId: existingRec ? profileOf(existingRec) : activeProfile,
+    category: cat, name,
+    gender: selectedVariation ? (selectedVariation.gender || null) : (existingRec ? existingRec.gender || null : null),
+    image: null,
+    action,
+    price: isItem ? price : total,
+    qty: isItem ? qty : 1,
+    total, perUnit: isItem, date,
+    comment: $('f-comment').value.trim(),
+    cash: $('f-cash').checked
+  };
+
+  if (action === 'Продал') {
+    const existing = editingId ? transactions.find(t => t.id === editingId) : null;
+    if (existing && existing.lotId) {
+      record.lotId = existing.lotId;
+      record.costBasis = existing.costBasis != null ? existing.costBasis : null;
+      const lot = transactions.find(t => t.id === record.lotId);
+      if (lot) record.costBasis = unitCost(lot) * record.qty;
+    } else {
+      const hit = findOpenLot(cat, name, record.gender);
+      if (hit) {
+        record.lotId = hit.lot.id;
+        record.costBasis = unitCost(hit.lot) * record.qty;
+      } else {
+        record.lotId = null;
+        record.costBasis = 0;
+      }
+    }
+  }
+
+  if (action === 'Купил') {
+    const ex = moneyVal($('f-extra'));
+    const prev = existingRec && existingRec.extras ? existingRec.extras.filter(e => !e.auto) : [];
+    record.extras = ex ? [{ id: Date.now() + 1, name: 'Доп. расходы', amount: ex, auto: true }, ...prev] : prev;
+  }
+
+  if (editingId) {
+    const i = transactions.findIndex(t => t.id === editingId);
+    if (i >= 0) transactions[i] = record;
+  } else transactions.push(record);
+
+  await saveTx();
+  resetForm();
+  applyProfileDefaultCategory();
+  renderAll();
+});
+
+function applyProfileDefaultCategory() {
+  if (isAllProfiles()) return;
+  catSelect.value = defaultCatFor(activeProfile);
+  applyCategoryUI();
+  if (typeof renderPicked === 'function') renderPicked();
+}
+
+function resetForm() {
+  editingId = null;
+  pendingRevert = null;
+  selectedVariation = null;
+  fProduct.value = '';
+  $('f-freename').value = '';
+  $('f-amount').value = '';
+  $('f-price').value = '';
+  $('f-extra').value = '';
+  $('f-qty').value = '1';
+  $('f-comment').value = '';
+  $('f-cash').checked = false;
+  $('f-date').value = nowLocalISO();
+  $('preview').textContent = '';
+  $('form-error').style.display = 'none';
+  if (typeof renderPicked === 'function') renderPicked();
+  $('submit-btn').textContent = '+ Внести';
+  $('form-mode-title').textContent = 'Новая сделка';
+  $('cancel-edit').classList.add('hidden');
+}
+$('cancel-edit').addEventListener('click', resetForm);
+
+/* ---------- inventory list ---------- */
+function withScroll(el, fn) {
+  const top = el ? el.scrollTop : 0;
+  const pageTop = window.scrollY;
+  fn();
+  if (el) el.scrollTop = top;
+  window.scrollTo({ top: pageTop });
+}
+
+function renderInventory() {
+  const list = $('inventory-list');
+  const empty = $('inventory-empty');
+  list.innerHTML = '';
+  const items = inventory().sort((a, b) => b.lot.date.localeCompare(a.lot.date));
+  $('inventory-count').textContent = items.length ? items.length + ' позиций' : '';
+  if (!items.length) { empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+
+  const frag = document.createDocumentFragment();
+  items.forEach(({ lot, sold, remaining }) => {
+    const el = document.createElement('div');
+    el.className = 'deal-card';
+    el.style.background = actionColor('Купил') + '26';
+    el.style.borderLeftColor = catColor(lot.category);
+    const chips = [
+      isAllProfiles() && !echoesCategory(profileLabel(profileOf(lot)), lot.category)
+        ? `<span class="chip profile">${escapeHtml(profileLabel(profileOf(lot)))}</span>` : '',
+      catChip(lot.category),
+      genderChip(lot.gender),
+      `<span class="chip" style="color:${actionColor('Купил')}">${remaining} шт.</span>`,
+      `<span class="chip muted">закуп: ${money(lot.price)}/шт</span>`,
+      extrasSum(lot) ? `<span class="chip red">доп. ${money(extrasSum(lot))}</span>` : '',
+      `<span class="chip muted">вложено ${money(remaining * unitCost(lot))}</span>`,
+      sold ? `<span class="chip muted">продано ${sold} из ${lot.qty}</span>` : '',
+      lot.cash ? `<span class="chip muted">наличка</span>` : ''
+    ].filter(Boolean).join('');
+    el.innerHTML = `
+      ${imageFor(lot) ? `<img class="deal-img" loading="lazy" decoding="async" src="${imageFor(lot)}">` : `<div class="deal-img empty">—</div>`}
+      <div class="deal-body">
+        <div class="deal-head">
+          <div class="deal-name">${escapeHtml(lot.name)}</div>
+          <div class="deal-actions">
+            <button class="icon-btn edit-btn" data-id="${lot.id}" aria-label="Изменить">✎</button>
+            <button class="icon-btn del-btn" data-id="${lot.id}" aria-label="Удалить">🗑</button>
+          </div>
+        </div>
+        <div class="chips">${chips}</div>
+        ${lot.comment ? `<div class="deal-comment">${escapeHtml(lot.comment)}</div>` : ''}
+        <div class="deal-foot">
+          <div class="quick-btns">
+            <button class="quick-btn sell" data-sell="${lot.id}">Продал</button>
+            <button class="quick-btn expense" data-extra="${lot.id}">Доп. расходы</button>
+            <span class="buy-wrap">
+              <button class="quick-btn" data-buymenu="${lot.id}">Купил ▾</button>
+              <span class="buy-menu" id="buymenu-${lot.id}">
+                <button type="button" data-rebuy="${lot.id}">Купил такой</button>
+                ${siblingsFor(lot).length ? `<button type="button" data-other="${lot.id}">Купил другой</button>` : ''}
+              </span>
+            </span>
+          </div>
+          <div class="deal-date">куплено ${fmtDate(lot.date)}</div>
+        </div>
+      </div>`;
+    frag.appendChild(el);
+  });
+  list.appendChild(frag);
+
+  list.querySelectorAll('.del-btn').forEach(b => b.addEventListener('click', () => deleteTx(Number(b.dataset.id))));
+  list.querySelectorAll('.edit-btn').forEach(b => b.addEventListener('click', () => startEdit(Number(b.dataset.id))));
+  list.querySelectorAll('[data-rebuy]').forEach(b => b.addEventListener('click', () => repeatDeal(Number(b.dataset.rebuy), 'Купил')));
+  list.querySelectorAll('[data-other]').forEach(b => b.addEventListener('click', () => openSiblingPicker(Number(b.dataset.other))));
+  list.querySelectorAll('[data-extra]').forEach(b => b.addEventListener('click', () => openLotExtraForm(Number(b.dataset.extra))));
+  list.querySelectorAll('[data-buymenu]').forEach(b => b.addEventListener('click', e => {
+    e.stopPropagation();
+    const menu = $('buymenu-' + b.dataset.buymenu);
+    const wasOpen = menu.classList.contains('open');
+    document.querySelectorAll('.buy-menu').forEach(m => m.classList.remove('open'));
+    if (!wasOpen) menu.classList.add('open');
+  }));
+  list.querySelectorAll('[data-sell]').forEach(b => b.addEventListener('click', ev => openSellForm(ev.target.closest('.deal-card'), Number(b.dataset.sell))));
+}
+
+/* other entries that belong to the same catalog card (other colorways / other gender) */
+function siblingsFor(item) {
+  const n = String(item.name).trim().toLowerCase();
+  const owner = products.find(p => {
+    if (p.category !== item.category) return false;
+    if (hasColorways(p.category)) {
+      return (p.colorways || []).some(c => c.name.trim().toLowerCase() === n) &&
+             (p.gender || null) === (item.gender || null);
+    }
+    return p.name.trim().toLowerCase() === n;
+  });
+  if (!owner || !hasColorways(owner.category)) return [];
+  return (owner.colorways || [])
+    .filter(c => c.name.trim().toLowerCase() !== n)
+    .map(c => ({ id: c.id, name: c.name, image: c.image, category: owner.category, gender: owner.gender || null }));
+}
+
+function openSiblingPicker(lotId) {
+  const lot = transactions.find(t => t.id === lotId);
+  if (!lot) return;
+  const sibs = siblingsFor(lot);
+  if (!sibs.length) return;
+
+  const f = openModal('Купил другую расцветку', `
+    <div class="hint" style="margin-bottom:10px;">Выберите расцветку — форма заполнится ценой из этой покупки (${money(lot.price)}/шт).</div>
+    <input type="text" class="sp-search" placeholder="Поиск расцветки" autocomplete="off" style="margin-bottom:8px;">
+    <div class="sp-list" style="max-height:340px; overflow-y:auto; border:1px solid var(--line); border-radius:6px;"></div>
+    <div class="btn-row" style="margin-top:10px;">
+      <button type="button" class="secondary sp-cancel">Отмена</button>
+    </div>`);
+
+  const listEl = f.querySelector('.sp-list');
+  const searchEl = f.querySelector('.sp-search');
+
+  const draw = () => {
+    const q = searchEl.value.trim().toLowerCase();
+    const words = q ? q.split(/\s+/).filter(Boolean) : [];
+    const rows = sibs.filter(v => !words.length || words.every(w => v.name.toLowerCase().includes(w)));
+    listEl.innerHTML = rows.length
+      ? rows.map(v => `
+        <div class="ac-item" data-id="${v.id}">
+          ${v.image ? `<img class="ac-thumb" src="${v.image}">` : `<div class="ac-thumb empty">—</div>`}
+          <div class="ac-text">${escapeHtml(v.name)}${genderBadge(v.gender)}</div>
+        </div>`).join('')
+      : `<div class="ac-none">Ничего не найдено</div>`;
+    listEl.querySelectorAll('.ac-item').forEach(item => {
+      item.addEventListener('click', () => {
+        const v = rows.find(r => String(r.id) === item.dataset.id);
+        if (v) prefillBuy(v, lot);
+        closeModal();
+      });
+    });
+  };
+  searchEl.addEventListener('input', draw);
+  draw();
+  searchEl.focus();
+  f.querySelector('.sp-cancel').addEventListener('click', closeModal);
+}
+
+function prefillBuy(entry, lot) {
+  editingId = null;
+  catSelect.value = entry.category;
+  applyCategoryUI();
+  fProduct.value = entry.name;
+  selectedVariation = entry;
+  $('f-action').value = 'Купил';
+  applyActionUI();
+  if (entry.category === 'Предмет') { setMoney($('f-price'), lot.price); $('f-qty').value = 1; }
+  else setMoney($('f-amount'), lot.price);
+  $('f-extra').value = '';
+  $('f-comment').value = '';
+  $('f-cash').checked = false;
+  $('f-date').value = nowLocalISO();
+  $('submit-btn').textContent = '+ Внести';
+  $('form-mode-title').textContent = 'Новая сделка';
+  $('cancel-edit').classList.add('hidden');
+  renderPicked();
+  updatePreview();
+  document.querySelector('.maintab[data-view="deals"]').click();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function openLotExtraForm(lotId) {
+  const lot = transactions.find(t => t.id === lotId);
+  if (!lot) return;
+  const list = lot.extras || [];
+
+  const f = openModal('Доп. расходы', `
+    <div class="hint" style="margin-bottom:10px;">
+      «${escapeHtml(lot.name)}» · закуп ${money(lot.price)}/шт × ${lot.qty} шт.
+      ${list.length ? `<br>Уже добавлено: ${money(extrasSum(lot))} — итого ${money(unitCost(lot))}/шт.` : ''}
+    </div>
+    ${list.length ? `<div class="upg-list" style="border-top:none; padding-top:0; margin-bottom:10px;">
+      ${list.map(e => `
+        <div class="upg-row">
+          <div class="u-name">${escapeHtml(e.name)}</div>
+          <div class="u-val">+ ${money(e.amount)}</div>
+          <button class="u-del" data-ex="${e.id}" aria-label="Удалить">✕</button>
+        </div>`).join('')}
+    </div>` : ''}
+    <label>Что добавили</label>
+    <input type="text" class="le-name" placeholder="Например: Автопилот" style="margin-bottom:8px;">
+    <label>Сумма</label>
+    <input type="text" class="le-amount" inputmode="numeric" placeholder="0" autocomplete="off">
+    <div class="hint" style="margin-top:6px;">Расход увеличит закупочную цену позиции — прибыль с продажи посчитается уже с ним.</div>
+    <div class="error le-error"></div>
+    <div class="btn-row" style="margin-top:10px;">
+      <button type="button" class="le-save">Добавить</button>
+      <button type="button" class="secondary le-cancel">Закрыть</button>
+    </div>`);
+
+  const amountEl = f.querySelector('.le-amount');
+  attachMoneyInput(amountEl);
+  f.querySelector('.le-name').focus();
+  f.querySelector('.le-cancel').addEventListener('click', closeModal);
+
+  f.querySelectorAll('.u-del').forEach(b => b.addEventListener('click', async () => {
+    const ex = (lot.extras || []).find(e => e.id === Number(b.dataset.ex));
+    if (ex && !confirm(`Удалить расход «${ex.name}» на ${money(ex.amount)}?`)) return;
+    lot.extras = (lot.extras || []).filter(e => e.id !== Number(b.dataset.ex));
+    await saveTx();
+    closeModal();
+    renderAll();
+  }));
+
+  f.querySelector('.le-save').addEventListener('click', async () => {
+    const errEl = f.querySelector('.le-error');
+    const name = f.querySelector('.le-name').value.trim();
+    const amount = moneyVal(amountEl);
+    if (!name) { errEl.textContent = 'Введите, что добавили'; errEl.style.display = 'block'; return; }
+    if (!(amount > 0)) { errEl.textContent = 'Укажите сумму'; errEl.style.display = 'block'; return; }
+    errEl.style.display = 'none';
+    if (!lot.extras) lot.extras = [];
+    lot.extras.push({ id: Date.now(), name, amount });
+    await saveTx();
+    closeModal();
+    renderAll();
+  });
+}
+
+function openSellForm(cardEl, lotId) {
+  const ex = cardEl.querySelector('.sell-form');
+  if (ex) { ex.remove(); return; }
+  const inv = inventory().find(x => x.lot.id === lotId);
+  if (!inv) return;
+  const { lot, remaining } = inv;
+
+  const f = document.createElement('div');
+  f.className = 'sell-form';
+  f.innerHTML = `
+    <div class="row">
+      <div>
+        <label>Цена продажи за шт.</label>
+        <input type="text" class="s-price" inputmode="numeric" placeholder="0" autocomplete="off">
+      </div>
+      <div>
+        <label>Количество (макс. ${remaining})</label>
+        <input type="number" class="s-qty" min="1" max="${remaining}" step="1" value="${remaining}">
+      </div>
+    </div>
+    <div class="row full">
+      <div>
+        <label>Дата и время</label>
+        <input type="datetime-local" class="s-date" value="${nowLocalISO()}">
+      </div>
+    </div>
+    <div class="row full">
+      <div>
+        <label>Комментарий</label>
+        <textarea class="s-comment" rows="2" placeholder="Необязательно"></textarea>
+      </div>
+    </div>
+    <div class="checkrow">
+      <input type="checkbox" class="s-cash" id="cash-${lotId}">
+      <label for="cash-${lotId}">Наличка</label>
+    </div>
+    <div class="sell-preview"></div>
+    <div class="error s-error"></div>
+    <div class="btn-row">
+      <button type="button" class="s-save">Продал</button>
+      <button type="button" class="secondary s-cancel">Отмена</button>
+    </div>`;
+  cardEl.querySelector('.deal-body').appendChild(f);
+
+  const priceEl = f.querySelector('.s-price');
+  const qtyEl = f.querySelector('.s-qty');
+  const prev = f.querySelector('.sell-preview');
+  attachMoneyInput(priceEl);
+  const upd = () => {
+    const p = moneyVal(priceEl);
+    const q = parseInt(qtyEl.value) || 0;
+    if (p > 0 && q > 0) {
+      const profit = (p - unitCost(lot)) * q;
+      prev.innerHTML = `Выручка ${money(p * q)} · закуп ${money(unitCost(lot) * q)} · чистыми <b class="${profit >= 0 ? 'pos' : 'neg'}" style="color:${profit >= 0 ? 'var(--green)' : 'var(--red)'}">${profit >= 0 ? '+' : '−'} ${money(profit)}</b>`;
+    } else prev.textContent = '';
+  };
+  priceEl.addEventListener('input', upd);
+  qtyEl.addEventListener('input', upd);
+  priceEl.focus();
+
+  f.querySelector('.s-cancel').addEventListener('click', () => f.remove());
+  f.querySelector('.s-save').addEventListener('click', async () => {
+    const errEl = f.querySelector('.s-error');
+    const price = moneyVal(priceEl);
+    const qty = parseInt(qtyEl.value);
+    const date = f.querySelector('.s-date').value;
+    const fail = m => { errEl.textContent = m; errEl.style.display = 'block'; };
+    if (!(price > 0)) return fail('Укажите цену продажи');
+    if (!(qty >= 1)) return fail('Количество должно быть не меньше 1');
+    if (qty > remaining) return fail(`На складе только ${remaining} шт.`);
+    if (!date) return fail('Укажите дату');
+    errEl.style.display = 'none';
+
+    transactions.push({
+      id: Date.now(),
+      profileId: profileOf(lot),
+      category: lot.category,
+      name: lot.name,
+      gender: lot.gender || null,
+      action: 'Продал',
+      price, qty,
+      total: price * qty,
+      perUnit: lot.perUnit || qty > 1,
+      date,
+      comment: f.querySelector('.s-comment').value.trim(),
+      cash: f.querySelector('.s-cash').checked,
+      lotId: lot.id,
+      costBasis: unitCost(lot) * qty
+    });
+    await saveTx();
+    renderAll();
+  });
+}
+
+/* ---------- deal cards (history) ---------- */
+const HISTORY_PAGE = 50;
+const historyLimits = {};
+function renderHistory(listId, emptyId, rows) {
+  const list = $(listId), empty = $(emptyId);
+  list.innerHTML = '';
+  const all = [...rows].sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
+  if (!all.length) { empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  const limit = historyLimits[listId] || HISTORY_PAGE;
+  const sorted = all.slice(0, limit);
+
+  const frag = document.createDocumentFragment();
+  sorted.forEach(t => {
+    const isBuy = t.action === 'Купил';
+    const pos = isPositive(t.action);
+    const el = document.createElement('div');
+    el.className = 'deal-card';
+    el.style.background = actionColor(t.action) + '26';
+    el.style.borderLeftColor = catColor(t.category);
+    const net = t.action === 'Продал' ? t.total - costBasisOf(t) : null;
+    const ex = isBuy ? extrasSum(t) : 0;
+    const chips = [
+      isAllProfiles() && !echoesCategory(profileLabel(profileOf(t)), t.category)
+        ? `<span class="chip profile">${escapeHtml(profileLabel(profileOf(t)))}</span>` : '',
+      catChip(t.category),
+      genderChip(t.gender),
+      actionChip(t.action),
+      t.qty > 1 ? `<span class="chip">x${t.qty}</span>` : '',
+      `<span class="chip" style="color:${actionColor(t.action)}">${isBuy ? '' : pos ? '+ ' : '− '}${money(t.total)}</span>`,
+      ex ? `<span class="chip red">доп. ${money(ex)}</span>` : '',
+      net !== null ? `<span class="chip ${net >= 0 ? 'green' : 'red'}">чистыми ${net >= 0 ? '+' : '−'} ${money(net)}</span>` : '',
+      t.qty > 1 ? `<span class="chip muted">за шт: ${money(t.price)}</span>` : '',
+      t.cash ? `<span class="chip muted">наличка</span>` : ''
+    ].filter(Boolean).join('');
+
+    el.innerHTML = `
+      ${imageFor(t) ? `<img class="deal-img" loading="lazy" decoding="async" src="${imageFor(t)}">` : `<div class="deal-img empty">—</div>`}
+      <div class="deal-body">
+        <div class="deal-head">
+          <div class="deal-name">${escapeHtml(t.name)}</div>
+          <div class="deal-actions">
+            <button class="icon-btn edit-btn" data-id="${t.id}" aria-label="Изменить">✎</button>
+            <button class="icon-btn del-btn" data-id="${t.id}" aria-label="Удалить">🗑</button>
+          </div>
+        </div>
+        <div class="chips">${chips}</div>
+        ${t.comment ? `<div class="deal-comment">${escapeHtml(t.comment)}</div>` : ''}
+        <div class="deal-foot">
+          <div class="quick-btns">
+            <button class="quick-btn" data-repeat="Купил" data-id="${t.id}">Купил такое</button>
+            <button class="quick-btn" data-repeat="Продал" data-id="${t.id}">Продал такое</button>
+          </div>
+          <div class="deal-date">${fmtDate(t.date)}</div>
+        </div>
+      </div>`;
+    frag.appendChild(el);
+  });
+  list.appendChild(frag);
+
+  if (all.length > sorted.length) {
+    const more = document.createElement('button');
+    more.type = 'button';
+    more.className = 'cw-more';
+    more.textContent = `Показать ещё (осталось ${all.length - sorted.length})`;
+    more.addEventListener('click', () => {
+      historyLimits[listId] = (historyLimits[listId] || HISTORY_PAGE) + HISTORY_PAGE;
+      renderHistory(listId, emptyId, rows);
+    });
+    list.appendChild(more);
+  }
+
+  list.querySelectorAll('.del-btn').forEach(b => b.addEventListener('click', () => deleteTx(Number(b.dataset.id))));
+  list.querySelectorAll('.edit-btn').forEach(b => b.addEventListener('click', () => startEdit(Number(b.dataset.id))));
+  list.querySelectorAll('.quick-btn[data-repeat]').forEach(b => b.addEventListener('click', () => repeatDeal(Number(b.dataset.id), b.dataset.repeat)));
+}
+
+async function deleteTx(id) {
+  const t = transactions.find(x => x.id === id);
+  if (!t) return;
+  const when = fmtDate(t.date);
+  const sum = money(t.total);
+  if (t.action === 'Купил') {
+    const linked = transactions.filter(x => x.lotId === id).length;
+    const msg = linked
+      ? `Удалить покупку «${t.name}» (${sum}, ${when})?\n\nК ней привязано продаж: ${linked}. Они останутся в истории, но без закупочной цены — прибыль по ним станет неверной.`
+      : `Удалить покупку «${t.name}» (${sum}, ${when})?\n\nПозиция пропадёт со склада.`;
+    if (!confirm(msg)) return;
+    transactions.forEach(x => { if (x.lotId === id) { x.lotId = null; } });
+  } else {
+    const back = t.action === 'Продал' && t.lotId ? '\n\nТовар вернётся на склад.' : '';
+    if (!confirm(`Удалить сделку «${t.action} · ${t.name}» (${sum}, ${when})?${back}`)) return;
+  }
+  transactions = transactions.filter(x => x.id !== id);
+  if (editingId === id) resetForm();
+  await saveTx();
+  renderAll();
+}
+
+function fillForm(t) {
+  catSelect.value = t.category;
+  applyCategoryUI();
+  if (t.category === OTHER) $('f-freename').value = t.name;
+  else { fProduct.value = t.name; selectedVariation = { name: t.name, image: t.image, category: t.category, gender: t.gender || null }; }
+  $('f-action').value = t.action;
+  applyActionUI();
+  if (t.category === 'Предмет') { setMoney($('f-price'), t.price); $('f-qty').value = t.qty; }
+  else setMoney($('f-amount'), t.total);
+  const autoEx = (t.extras || []).find(e => e.auto);
+  setMoney($('f-extra'), autoEx ? autoEx.amount : '');
+  $('f-comment').value = t.comment || '';
+  $('f-cash').checked = !!t.cash;
+  renderPicked();
+  updatePreview();
+}
+function startEdit(id) {
+  const t = transactions.find(x => x.id === id);
+  if (!t) return;
+  if (isAllProfiles()) { activeProfile = profileOf(t); renderAll(); }
+  editingId = id;
+  fillForm(t);
+  $('f-date').value = t.date;
+  $('submit-btn').textContent = 'Сохранить изменения';
+  $('form-mode-title').textContent = 'Редактирование сделки';
+  $('cancel-edit').classList.remove('hidden');
+  document.querySelector('.maintab[data-view="deals"]').click();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+function repeatDeal(id, action) {
+  const t = transactions.find(x => x.id === id);
+  if (!t) return;
+  if (isAllProfiles()) { activeProfile = profileOf(t); renderAll(); }
+  editingId = null;
+  fillForm(t);
+  $('f-action').value = action;
+  applyActionUI();
+  $('f-comment').value = '';
+  $('f-cash').checked = false;
+  $('f-date').value = nowLocalISO();
+  $('submit-btn').textContent = '+ Внести';
+  $('form-mode-title').textContent = 'Новая сделка';
+  $('cancel-edit').classList.add('hidden');
+  updatePreview();
+  document.querySelector('.maintab[data-view="deals"]').click();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+/* ---------- stat cards ---------- */
+function inRange(dateStr, daysBack) {
+  const d = new Date(dateStr);
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() - (daysBack - 1));
+  return d >= start;
+}
+function renderStatCards() {
+  [['today',1],['week',7],['month',30]].forEach(([key, days]) => {
+    const rows = scoped().filter(t => inRange(t.date, days) && t.action !== 'Купил');
+    const net = rows.reduce((s, t) => s + realizedOf(t), 0);
+    const el = $('stat-' + key);
+    el.textContent = (net >= 0 ? '+ ' : '− ') + money(net);
+    el.className = 'value ' + (net >= 0 ? 'pos' : 'neg');
+    const sales = rows.filter(t => t.action === 'Продал').length;
+    $('stat-' + key + '-sub').textContent = sales + ' продаж';
+  });
+  const inv = inventory();
+  $('stat-invested').textContent = money(investedTotal());
+  const units = inv.reduce((s, x) => s + x.remaining, 0);
+  $('stat-invested-sub').textContent = units + ' шт. в ' + inv.length + ' позициях';
+}
+
+/* ---------- history filters ---------- */
+const hCategory = $('h-category');
+hCategory.innerHTML = '<option value="">Все категории</option>' + [...CATEGORIES, OTHER].map(c => `<option value="${c}">${c}</option>`).join('');
+function filteredTransactions() {
+  const q = $('h-search').value.trim().toLowerCase();
+  const cat = hCategory.value, act = $('h-action').value;
+  const words = q ? q.split(/\s+/).filter(Boolean) : [];
+  return scoped().filter(t => {
+    if (cat && t.category !== cat) return false;
+    if (act && t.action !== act) return false;
+    if (words.length) { const n = t.name.toLowerCase(); if (!words.every(w => n.includes(w))) return false; }
+    return true;
+  });
+}
+function renderFilteredHistory() {
+  const rows = filteredTransactions();
+  const net = rows.reduce((s, t) => s + realizedOf(t), 0);
+  $('h-summary').innerHTML = rows.length
+    ? `Найдено сделок: ${rows.length} · чистыми: <b class="${net >= 0 ? 'pos' : 'neg'}">${net >= 0 ? '+' : '−'} ${money(net)}</b>`
+    : '';
+  renderHistory('history-list-full', 'history-empty-full', rows);
+}
+$('h-search').addEventListener('input', renderFilteredHistory);
+['h-category','h-action'].forEach(id => $(id).addEventListener('change', renderFilteredHistory));
+$('h-reset').addEventListener('click', () => {
+  $('h-search').value = ''; hCategory.value = ''; $('h-action').value = '';
+  renderFilteredHistory();
+});
+
+/* ---------- item stats ---------- */
+const sCategory = $('s-category');
+sCategory.innerHTML = '<option value="">Все категории</option>' + [...CATEGORIES, OTHER].map(c => `<option value="${c}">${c}</option>`).join('');
+
+function buildItemStats() {
+  const q = $('s-search').value.trim().toLowerCase();
+  const cat = sCategory.value;
+  const words = q ? q.split(/\s+/).filter(Boolean) : [];
+  const by = {};
+  statsScoped().forEach(t => {
+    if (cat && t.category !== cat) return;
+    if (words.length) { const n = t.name.toLowerCase(); if (!words.every(w => n.includes(w))) return; }
+    const key = itemKey(t);
+    if (!by[key]) by[key] = {
+      name: t.name, category: t.category, image: t.image, gender: t.gender || null,
+      boughtQty: 0, soldQty: 0, buySum: 0, sellSum: 0,
+      buyPrices: [], sellPrices: [], realized: 0, deals: 0, extras: 0, profiles: new Set()
+    };
+    const g = by[key];
+    g.profiles.add(profileOf(t));
+    if (!g.image) g.image = imageFor(t);
+    g.deals++;
+    g.realized += realizedOf(t);
+    if (t.action === 'Купил') {
+      g.boughtQty += t.qty;
+      g.buySum += t.total;
+      g.buyPrices.push(t.price);
+      g.extras += extrasSum(t);
+    }
+    if (t.action === 'Потратил') { g.boughtQty += t.qty; g.buySum += t.total; g.buyPrices.push(t.price); }
+    if (t.action === 'Продал' || t.action === 'Получил') { g.soldQty += t.qty; g.sellSum += t.total; g.sellPrices.push(t.price); }
+  });
+  const inv = statsInventory();
+  Object.entries(by).forEach(([k, g]) => {
+    const mine = inv.filter(x => itemKey(x.lot) === k);
+    g.remaining = mine.reduce((s, x) => s + x.remaining, 0);
+    g.investedNow = mine.reduce((s, x) => s + x.remaining * unitCost(x.lot), 0);
+  });
+  return Object.values(by).sort((a, b) => b.realized - a.realized);
+}
+
+function renderItemStats() {
+  const list = $('stats-list'), empty = $('stats-empty');
+  list.innerHTML = '';
+  const items = buildItemStats();
+  if (!items.length) { empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+
+  items.forEach(g => {
+    const avgBuy = g.boughtQty ? g.buySum / g.boughtQty : null;
+    const avgSell = g.soldQty ? g.sellSum / g.soldQty : null;
+    const minBuy = g.buyPrices.length ? Math.min(...g.buyPrices) : null;
+    const maxBuy = g.buyPrices.length ? Math.max(...g.buyPrices) : null;
+    const minSell = g.sellPrices.length ? Math.min(...g.sellPrices) : null;
+    const maxSell = g.sellPrices.length ? Math.max(...g.sellPrices) : null;
+    const v = n => n === null ? '—' : money(n);
+
+    const el = document.createElement('div');
+    el.className = 'stat-item';
+    el.style.borderLeftColor = catColor(g.category);
+    el.innerHTML = `
+      <div class="stat-item-head">
+        ${g.image ? `<img class="si-img" src="${g.image}">` : ''}
+        <div style="flex:1; min-width:0;">
+          <div class="si-name">${escapeHtml(g.name)}${genderBadge(g.gender)}</div>
+          <div class="si-cat">${statsIsAll() && g.profiles && g.profiles.size > 0 ? escapeHtml([...g.profiles].sort().map(profileLabel).join(', ')) + ' · ' : ''}<span style="color:${catColor(g.category)}">${escapeHtml(g.category)}</span> · ${g.deals} сделок${g.remaining ? ' · на складе ' + g.remaining + ' шт.' : ''}</div>
+        </div>
+        <div class="si-net ${g.realized >= 0 ? 'profit-pos' : 'profit-neg'}">${g.realized >= 0 ? '+' : '−'} ${money(g.realized)}</div>
+      </div>
+      <div class="si-block">
+        <div class="si-block-title">Покупка</div>
+        <div class="si-grid">
+          <div class="si-row"><span>Куплено</span><span>${g.boughtQty || '—'}</span></div>
+          <div class="si-row"><span>Средняя</span><span>${v(avgBuy)}</span></div>
+          <div class="si-row"><span>Минимальная</span><span>${v(minBuy)}</span></div>
+          <div class="si-row"><span>Максимальная</span><span>${v(maxBuy)}</span></div>
+        </div>
+        ${g.extras ? `<div class="si-grid" style="margin-top:6px;">
+          <div class="si-row"><span>Доп. расходы</span><span>${money(g.extras)}</span></div>
+        </div>` : ''}
+      </div>
+      <div class="si-block">
+        <div class="si-block-title">Продажа</div>
+        <div class="si-grid">
+          <div class="si-row"><span>Продано</span><span>${g.soldQty || '—'}</span></div>
+          <div class="si-row"><span>Средняя</span><span>${v(avgSell)}</span></div>
+          <div class="si-row"><span>Минимальная</span><span>${v(minSell)}</span></div>
+          <div class="si-row"><span>Максимальная</span><span>${v(maxSell)}</span></div>
+        </div>
+      </div>
+      ${g.remaining ? `<div class="si-block">
+        <div class="si-block-title">Сейчас на складе</div>
+        <div class="si-grid">
+          <div class="si-row"><span>Остаток</span><span>${g.remaining} шт.</span></div>
+          <div class="si-row"><span>Вложено</span><span>${money(g.investedNow)}</span></div>
+        </div>
+      </div>` : ''}`;
+    list.appendChild(el);
+  });
+}
+$('s-search').addEventListener('input', renderItemStats);
+sCategory.addEventListener('change', renderItemStats);
+$('stats-profile').addEventListener('change', () => { renderItemStats(); renderDays(); });
+
+
+/* ---------- daily breakdown ---------- */
+const WEEKDAYS = ['воскресенье','понедельник','вторник','среда','четверг','пятница','суббота'];
+let openDays = {};
+
+$('stats-seg').querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+  $('stats-seg').querySelectorAll('button').forEach(x => x.classList.remove('active'));
+  b.classList.add('active');
+  const days = b.dataset.mode === 'days';
+  $('stats-days-wrap').classList.toggle('hidden', !days);
+  $('stats-items-wrap').classList.toggle('hidden', days);
+  if (days) renderDays();
+}));
+
+function dayKey(iso) { return iso.slice(0, 10); }
+function fmtDayLabel(key) {
+  const [y, m, d] = key.split('-');
+  return `${d}.${m}.${y.slice(2)}`;
+}
+function buildDays() {
+  const from = $('d-from').value, to = $('d-to').value;
+  const by = {};
+  statsScoped().forEach(t => {
+    if (t.action === 'Купил') return;
+    const key = dayKey(t.date);
+    if (from && key < from) return;
+    if (to && key > to) return;
+    if (!by[key]) by[key] = { key, net: 0, revenue: 0, cost: 0, extra: 0, sales: 0, rows: [] };
+    const g = by[key];
+    const r = realizedOf(t);
+    g.net += r;
+    if (t.action === 'Продал') {
+      g.sales += t.qty;
+      g.revenue += t.total;
+      g.cost += costBasisOf(t);
+    } else {
+      g.extra += r;
+    }
+    g.rows.push({ t, r });
+  });
+  return Object.values(by).sort((a, b) => b.key.localeCompare(a.key));
+}
+function renderDays() {
+  const list = $('days-list'), empty = $('days-empty');
+  list.innerHTML = '';
+  const days = buildDays();
+  const total = days.reduce((s, d) => s + d.net, 0);
+  $('d-summary').innerHTML = days.length
+    ? `Дней с движением: ${days.length} · итого чистыми: <b class="${total >= 0 ? 'pos' : 'neg'}">${total >= 0 ? '+' : '−'} ${money(total)}</b>`
+    : '';
+  if (!days.length) { empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+
+  days.forEach(d => {
+    const isOpen = !!openDays[d.key];
+    const el = document.createElement('div');
+    el.className = 'day-row' + (isOpen ? ' open' : '');
+    const wd = WEEKDAYS[new Date(d.key + 'T12:00:00').getDay()];
+    el.innerHTML = `
+      <div class="day-head">
+        <div>
+          <div class="day-date">${fmtDayLabel(d.key)}</div>
+          <div class="day-weekday">${wd}</div>
+        </div>
+        <div class="day-net ${d.net >= 0 ? 'profit-pos' : 'profit-neg'}">${d.net >= 0 ? '+' : '−'} ${money(d.net)}</div>
+      </div>
+      <div class="day-meta">
+        <span>продано <b>${d.sales}</b> шт.</span>
+        <span>выручка <b>${money(d.revenue)}</b></span>
+        <span>закуп <b>${money(d.cost)}</b></span>
+        ${d.extra ? `<span>прочее <b>${d.extra >= 0 ? '+' : '−'} ${money(d.extra)}</b></span>` : ''}
+      </div>
+      ${isOpen ? `<div class="day-details">${d.rows
+        .sort((a, b) => b.t.date.localeCompare(a.t.date))
+        .map(({ t, r }) => `
+          <div class="day-line">
+            <div class="dl-name">${escapeHtml(t.name)}${t.qty > 1 ? ` <span class="dl-time">x${t.qty}</span>` : ''}
+              <div class="dl-time">${escapeHtml(t.action)} · ${t.date.slice(11, 16)}</div>
+            </div>
+            <div class="dl-val ${r >= 0 ? 'profit-pos' : 'profit-neg'}">${r >= 0 ? '+' : '−'} ${money(r)}</div>
+          </div>`).join('')}</div>` : ''}`;
+    el.addEventListener('click', () => { openDays[d.key] = !openDays[d.key]; renderDays(); });
+    list.appendChild(el);
+  });
+}
+['d-from','d-to'].forEach(id => $(id).addEventListener('change', renderDays));
+$('d-reset').addEventListener('click', () => { $('d-from').value = ''; $('d-to').value = ''; renderDays(); });
+
+function activeView() {
+  const b = document.querySelector('.maintab.active');
+  return b ? b.dataset.view : 'deals';
+}
+function renderAll() {
+  const v = activeView();
+  refreshProfileSelects();
+  renderProfileBar();
+  if (v === 'deals') { renderStatCards(); withScroll($('inventory-list'), renderInventory); updatePreview(); }
+  else if (v === 'history') withScroll($('history-list-full'), renderFilteredHistory);
+  else if (v === 'stats') { renderItemStats(); renderDays(); }
+  else if (v === 'products') { if (typeof renderProducts === 'function') renderProducts(); }
+  else if (v === 'assets') { if (typeof renderAssets === 'function') renderAssets(); }
+  else if (v === 'settings') { if (typeof renderCloudStatus === 'function') renderCloudStatus(); if (typeof renderDataFileSettings === 'function') renderDataFileSettings(); renderThemeSettings(); renderProfileCategorySettings(); renderActionColorSettings(); renderColorSettings(); if (typeof updateStoreInfo === 'function') updateStoreInfo(); }
+}
+
+/* ---------- products tab ---------- */
+const CLOTHING = 'Одежда';
+const hasColorways = cat => cat === CLOTHING;
+const GENDER_SYMBOL = { m: '♂', f: '♀' };
+const GENDER_WORD = { m: 'муж', f: 'жен' };
+const genderBadge = g => g ? `<span class="g-badge g-${g}">${GENDER_SYMBOL[g]}</span>` : '';
+const genderChip = g => g ? `<span class="chip g-${g}">${GENDER_SYMBOL[g]}</span>` : '';
+const sameItem = (a, b) =>
+  a.category === b.category &&
+  String(a.name).trim().toLowerCase() === String(b.name).trim().toLowerCase() &&
+  (a.gender || null) === (b.gender || null);
+const itemKey = t => String(t.name).trim().toLowerCase() + '|' + (t.gender || '');
+
+function migrateProducts() {
+  let changed = false;
+  const out = [];
+  products.forEach(p => {
+    if (p.name !== undefined && p.colorways !== undefined) { out.push(p); return; }
+    changed = true;
+    const vars = p.variations || [];
+    if (hasColorways(p.category)) {
+      out.push({
+        id: p.id,
+        category: p.category,
+        name: vars.length ? vars[0].name : p.category,
+        image: vars.length ? vars[0].image : null,
+        colorways: vars.map(v => ({ id: v.id, name: v.name, image: v.image }))
+      });
+    } else if (vars.length) {
+      vars.forEach((v, i) => out.push({
+        id: i === 0 ? p.id : v.id,
+        category: p.category, name: v.name, image: v.image, colorways: []
+      }));
+    } else {
+      out.push({ id: p.id, category: p.category, name: p.category, image: null, colorways: [] });
+    }
+  });
+  products = out;
+  if (changed) saveProducts();
+}
+
+/* searchable entries used by the deal form */
+function entriesInCategory(cat) {
+  const out = [];
+  products.filter(p => p.category === cat).forEach(p => {
+    if (hasColorways(p.category)) {
+      (p.colorways || []).forEach(c => out.push({ id: c.id, name: c.name, image: imgOf(c), category: p.category, gender: p.gender || null }));
+    } else {
+      out.push({ id: p.id, name: p.name, image: imgOf(p), category: p.category, gender: p.gender || null });
+    }
+  });
+  return out;
+}
+
+$('np-toggle').addEventListener('click', () => {
+  const body = $('np-body');
+  const open = body.classList.toggle('hidden') === false;
+  $('np-arrow').textContent = open ? '▴' : '▾';
+  if (open) $('np-variation').focus();
+});
+
+const npCategory = $('np-category');
+npCategory.innerHTML = CATEGORIES.map(c => `<option value="${c}">${c}</option>`).join('');
+npCategory.value = CLOTHING;
+
+function applyNewProductUI() {
+  const cw = hasColorways(npCategory.value);
+  $('np-gender-wrap').classList.toggle('hidden', !cw);
+  $('np-name-label').textContent = cw ? 'Название первой расцветки' : 'Название товара';
+  $('np-variation').placeholder = cw ? 'Например: белые штаны Adibas' : 'Например: Автопилот';
+  $('np-hint').textContent = cw
+    ? 'Название товара возьмётся из первой расцветки. Остальные расцветки добавите в карточке ниже.'
+    : 'У этого вида товара расцветок нет — только сам товар.';
+}
+npCategory.addEventListener('change', applyNewProductUI);
+applyNewProductUI();
+
+let npPendingImage = null;
+attachImageInput($('np-zone'), $('np-file'), data => {
+  npPendingImage = data;
+  $('np-thumb').src = data;
+  $('np-thumb').style.display = 'block';
+  $('np-zone').textContent = 'Фото добавлено — вставьте другое, чтобы заменить';
+});
+
+$('new-product-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const errEl = $('product-form-error');
+  const name = $('np-variation').value.trim();
+  const cat = npCategory.value;
+  if (!name) { errEl.textContent = hasColorways(cat) ? 'Добавьте хотя бы одну расцветку' : 'Введите название товара'; errEl.style.display = 'block'; return; }
+  errEl.style.display = 'none';
+  const id = Date.now();
+  const npImgId = await putImage(npPendingImage);
+  products.push({
+    id, category: cat, name, image: null, imgId: npImgId,
+    gender: hasColorways(cat) ? ($('np-gender').value || null) : null,
+    colorways: hasColorways(cat) ? [{ id: id + 1, name, image: null, imgId: npImgId }] : []
+  });
+  await saveProducts();
+  $('np-variation').value = '';
+  $('np-file').value = '';
+  $('np-thumb').style.display = 'none';
+  $('np-zone').innerHTML = 'Вставьте <b>Ctrl+V</b>, перетащите файл или нажмите для выбора';
+  npPendingImage = null;
+  renderProducts();
+});
+
+const pFilterCat = $('p-filter-cat');
+pFilterCat.innerHTML = '<option value="">Все виды</option>' + CATEGORIES.map(c => `<option value="${c}">${c}</option>`).join('');
+$('p-search').addEventListener('input', renderProducts);
+pFilterCat.addEventListener('change', renderProducts);
+
+/* attaches paste + drag&drop + click-to-pick to a dropzone; calls onImage(dataUrl) */
+function attachImageInput(zone, fileInput, onImage) {
+  const handleFile = async file => {
+    if (!file || !file.type.startsWith('image/')) return;
+    const data = await resizeImage(file, 160);
+    onImage(data);
+  };
+
+  zone.setAttribute('tabindex', '0');
+  zone.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files && fileInput.files[0]) handleFile(fileInput.files[0]);
+  });
+
+  zone.addEventListener('paste', e => {
+    const items = (e.clipboardData || {}).items || [];
+    for (const it of items) {
+      if (it.type && it.type.startsWith('image/')) {
+        e.preventDefault();
+        handleFile(it.getAsFile());
+        return;
+      }
+    }
+  });
+
+  ['dragenter', 'dragover'].forEach(ev => zone.addEventListener(ev, e => {
+    e.preventDefault(); e.stopPropagation(); zone.classList.add('hot');
+  }));
+  ['dragleave', 'drop'].forEach(ev => zone.addEventListener(ev, e => {
+    e.preventDefault(); e.stopPropagation(); zone.classList.remove('hot');
+  }));
+  zone.addEventListener('drop', e => {
+    const dt = e.dataTransfer;
+    if (dt && dt.files && dt.files[0]) handleFile(dt.files[0]);
+  });
+
+  /* paste anywhere while this zone is the newest one on screen */
+  const globalPaste = e => {
+    if (!document.body.contains(zone)) { document.removeEventListener('paste', globalPaste); return; }
+    const items = (e.clipboardData || {}).items || [];
+    const tag = (document.activeElement && document.activeElement.tagName) || '';
+    if (tag === 'INPUT' || tag === 'TEXTAREA') {
+      const hasImg = [...items].some(i => i.type && i.type.startsWith('image/'));
+      if (!hasImg) return;
+    }
+    for (const it of items) {
+      if (it.type && it.type.startsWith('image/')) { e.preventDefault(); handleFile(it.getAsFile()); return; }
+    }
+  };
+  document.addEventListener('paste', globalPaste);
+}
+
+function resizeImage(file, maxSize) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        let w = img.width, h = img.height;
+        if (w > h && w > maxSize) { h = Math.round(h * maxSize / w); w = maxSize; }
+        else if (h > maxSize) { w = Math.round(w * maxSize / h); h = maxSize; }
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        c.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(c.toDataURL('image/jpeg', 0.6));
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+let openModalEl = null;
+function closeModal() {
+  if (openModalEl) { openModalEl.remove(); openModalEl = null; }
+}
+function openModal(title, innerHtml) {
+  closeModal();
+  const back = document.createElement('div');
+  back.className = 'modal-backdrop';
+  back.innerHTML = `<div class="modal-box"><div class="modal-title">${escapeHtml(title)}</div>${innerHtml}</div>`;
+  back.addEventListener('mousedown', e => { if (e.target === back) closeModal(); });
+  document.body.appendChild(back);
+  openModalEl = back;
+  return back.querySelector('.modal-box');
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+document.addEventListener('click', e => {
+  if (!e.target.closest || !e.target.closest('.buy-wrap')) {
+    document.querySelectorAll('.buy-menu').forEach(m => m.classList.remove('open'));
+  }
+});
+
+const CW_LIMIT = 9;
+const expandedProducts = new Set();
+
+function renderProducts() {
+  const listEl = $('products-list'), emptyEl = $('products-empty');
+  listEl.innerHTML = '';
+  const q = $('p-search').value.trim().toLowerCase();
+  const catF = pFilterCat.value;
+  const words = q ? q.split(/\s+/).filter(Boolean) : [];
+  const matches = products.filter(p => {
+    if (catF && p.category !== catF) return false;
+    if (!words.length) return true;
+    const hay = (p.name + ' ' + (p.gender ? GENDER_WORD[p.gender] + ' ' + GENDER_SYMBOL[p.gender] : 'унисекс') + ' ' + (p.colorways || []).map(c => c.name).join(' ')).toLowerCase();
+    return words.every(w => hay.includes(w));
+  });
+  if (!matches.length) {
+    emptyEl.style.display = 'block';
+    emptyEl.textContent = products.length ? 'Ничего не найдено.' : 'Пока нет товаров. Создайте карточку выше.';
+    return;
+  }
+  emptyEl.style.display = 'none';
+
+  CATEGORIES.forEach(cat => {
+    matches.filter(p => p.category === cat).forEach(product => {
+      const cw = hasColorways(product.category);
+      const n = (product.colorways || []).length;
+      const cover = imgOf(product) || (cw && n ? imgOf(product.colorways[0]) : null);
+      const g = document.createElement('div');
+      g.className = 'product-group';
+      g.innerHTML = `
+        <div class="product-group-head">
+          <div class="p-title">
+            ${cover ? `<img class="p-thumb" loading="lazy" decoding="async" src="${cover}">` : `<div class="p-thumb empty">нет фото</div>`}
+            <div style="min-width:0;">
+              <div class="p-name">${escapeHtml(product.name)}${genderBadge(product.gender)}</div>
+              <div style="display:flex; gap:6px; margin-top:4px; flex-wrap:wrap;">
+                <span class="p-badge" style="color:${catColor(product.category)}; border-color:${catColor(product.category)}44; background:${catColor(product.category)}14;">${escapeHtml(product.category)}</span>
+                ${cw ? `<span class="p-badge count">${n} ${n === 1 ? 'расцветка' : 'расцветок'}</span>` : ''}
+              </div>
+            </div>
+          </div>
+          <div style="display:flex; gap:6px; flex-shrink:0;">
+            <button class="icon-btn p-copy" aria-label="Дублировать товар" title="Дублировать">⧉</button>
+            <button class="icon-btn p-edit" aria-label="Изменить товар">✎</button>
+            <button class="icon-btn p-del" aria-label="Удалить товар">🗑</button>
+          </div>
+        </div>
+        ${cw ? `<button type="button" class="cw-more cw-toggle">${expandedProducts.has(product.id) ? 'Свернуть расцветки' : `Показать расцветки (${n})`}</button><div class="cw-body ${expandedProducts.has(product.id) ? '' : 'hidden'}"><div class="cw-title">Расцветки</div><div class="variation-grid"></div></div>` : ''}`;
+      listEl.appendChild(g);
+
+      if (cw) {
+        const toggle = g.querySelector('.cw-toggle');
+        toggle.addEventListener('click', () => {
+          if (expandedProducts.has(product.id)) expandedProducts.delete(product.id);
+          else expandedProducts.add(product.id);
+          renderProducts();
+        });
+      }
+
+      if (cw && expandedProducts.has(product.id)) {
+        const grid = g.querySelector('.variation-grid');
+        const all = product.colorways || [];
+        const shown = all;
+        shown.forEach(c => {
+          const card = document.createElement('div');
+          card.className = 'variation-card';
+          card.innerHTML = `
+            <button class="v-del" data-cw="${c.id}" aria-label="Удалить">✕</button>
+            <button class="v-edit" data-cw="${c.id}" aria-label="Изменить">✎</button>
+            ${imgOf(c) ? `<img loading="lazy" decoding="async" src="${imgOf(c)}">` : `<div class="v-noimg">без фото</div>`}
+            <div class="v-name">${escapeHtml(c.name)}</div>`;
+          grid.appendChild(card);
+        });
+        const add = document.createElement('button');
+        add.type = 'button';
+        add.className = 'add-variation-card';
+        add.textContent = '+';
+        add.addEventListener('click', () => openColorwayForm(product.id, null));
+        grid.appendChild(add);
+
+        grid.querySelectorAll('.v-edit').forEach(b =>
+          b.addEventListener('click', () => openColorwayForm(product.id, Number(b.dataset.cw))));
+        grid.querySelectorAll('.v-del').forEach(b =>
+          b.addEventListener('click', () => deleteColorway(product.id, Number(b.dataset.cw))));
+      }
+
+      g.querySelector('.p-copy').addEventListener('click', () => openDuplicateForm(product.id));
+      g.querySelector('.p-edit').addEventListener('click', () => openProductEdit(product.id));
+      g.querySelector('.p-del').addEventListener('click', () => deleteProduct(product.id));
+    });
+  });
+}
+
+function openDuplicateForm(productId) {
+  const src = products.find(p => p.id === productId);
+  if (!src) return;
+  const cw = hasColorways(src.category);
+  const n = (src.colorways || []).length;
+  const otherGender = src.gender === 'm' ? 'f' : src.gender === 'f' ? 'm' : '';
+
+  const f = openModal('Дублировать товар', `
+    <div class="hint" style="margin-bottom:10px;">
+      Копируется «${escapeHtml(src.name)}»${cw ? ` вместе с ${n} ${n === 1 ? 'расцветкой' : 'расцветками'} и фото` : ' вместе с фото'}.
+    </div>
+    <label>Название копии</label>
+    <input type="text" class="dp-name" style="margin-bottom:8px;" value="${escapeHtml(src.name)}">
+    ${cw ? `<label>Пол</label>
+    <select class="dp-gender" style="margin-bottom:8px;">
+      <option value="m"${otherGender === 'm' ? ' selected' : ''}>Мужское ♂</option>
+      <option value="f"${otherGender === 'f' ? ' selected' : ''}>Женское ♀</option>
+      <option value=""${!otherGender ? ' selected' : ''}>Унисекс</option>
+    </select>` : ''}
+    <div class="error dp-error"></div>
+    <div class="btn-row">
+      <button type="button" class="dp-save">Создать копию</button>
+      <button type="button" class="secondary dp-cancel">Отмена</button>
+    </div>`);
+
+  f.querySelector('.dp-cancel').addEventListener('click', closeModal);
+  f.querySelector('.dp-save').addEventListener('click', async () => {
+    const errEl = f.querySelector('.dp-error');
+    const name = f.querySelector('.dp-name').value.trim();
+    if (!name) { errEl.textContent = 'Введите название копии'; errEl.style.display = 'block'; return; }
+    const gEl = f.querySelector('.dp-gender');
+    const gender = cw ? (gEl ? (gEl.value || null) : null) : null;
+    if (products.some(p => p.id !== src.id && p.category === src.category &&
+        p.name.trim().toLowerCase() === name.toLowerCase() && (p.gender || null) === gender)) {
+      errEl.textContent = 'Такой товар уже есть — измените название или пол';
+      errEl.style.display = 'block';
+      return;
+    }
+    errEl.style.display = 'none';
+
+    const base = Date.now();
+    products.push({
+      id: base,
+      category: src.category,
+      name,
+      image: src.image || null,
+      imgId: src.imgId || null,
+      gender,
+      colorways: (src.colorways || []).map((c, i) => ({ id: base + 1 + i, name: c.name, image: c.image || null, imgId: c.imgId || null }))
+    });
+    await saveProducts();
+    closeModal();
+    expandedProducts.add(base);
+    renderProducts();
+  });
+  f.querySelector('.dp-name').focus();
+}
+
+function openProductEdit(productId) {
+  const product = products.find(p => p.id === productId);
+  if (!product) return;
+  const cw = hasColorways(product.category);
+  const f = openModal('Редактирование товара', `
+    <label>Название товара</label>
+    <input type="text" class="pe-name" style="margin-bottom:8px;" value="${escapeHtml(product.name)}">
+    <label>Вид товара</label>
+    <select class="pe-select" style="margin-bottom:8px;">
+      ${CATEGORIES.map(c => `<option value="${c}"${c === product.category ? ' selected' : ''}>${c}</option>`).join('')}
+    </select>
+    ${cw ? `<label>Пол</label>
+    <select class="pe-gender" style="margin-bottom:8px;">
+      <option value="m"${product.gender === 'm' ? ' selected' : ''}>Мужское ♂</option>
+      <option value="f"${product.gender === 'f' ? ' selected' : ''}>Женское ♀</option>
+      <option value=""${!product.gender ? ' selected' : ''}>Унисекс</option>
+    </select>` : ''}
+    ${cw ? '' : `<label>Фото</label>
+    <div class="dropzone pe-zone">Вставьте <b>Ctrl+V</b>, перетащите файл или нажмите для выбора</div>
+    <div class="file-row">
+      <input type="file" accept="image/*" class="pe-file hidden">
+      <img class="thumb-preview pe-thumb" style="display:${imgOf(product) ? 'block' : 'none'};" src="${imgOf(product) || ''}">
+    </div>`}
+    <div class="error pe-error"></div>
+    <div class="btn-row">
+      <button type="button" class="pe-save">Сохранить</button>
+      <button type="button" class="secondary pe-cancel">Отмена</button>
+    </div>`);
+
+  let pending = imgOf(product);
+  const fileEl = f.querySelector('.pe-file');
+  const zoneEl = f.querySelector('.pe-zone');
+  if (fileEl && zoneEl) attachImageInput(zoneEl, fileEl, data => {
+    pending = data;
+    const t = f.querySelector('.pe-thumb');
+    t.src = data; t.style.display = 'block';
+    zoneEl.textContent = 'Фото добавлено — вставьте другое, чтобы заменить';
+  });
+
+  f.querySelector('.pe-cancel').addEventListener('click', closeModal);
+  f.querySelector('.pe-save').addEventListener('click', async () => {
+    const name = f.querySelector('.pe-name').value.trim();
+    const errEl = f.querySelector('.pe-error');
+    if (!name) { errEl.textContent = 'Введите название товара'; errEl.style.display = 'block'; return; }
+    errEl.style.display = 'none';
+    const newCat = f.querySelector('.pe-select').value;
+    if (hasColorways(product.category) && !hasColorways(newCat) && (product.colorways || []).length > 1) {
+      if (!confirm('У этого вида товара расцветок нет. Все расцветки, кроме первой, будут удалены. Продолжить?')) return;
+    }
+    product.name = name;
+    product.category = newCat;
+    const gEl = f.querySelector('.pe-gender');
+    product.gender = hasColorways(newCat) ? (gEl ? (gEl.value || null) : product.gender || null) : null;
+    if (hasColorways(newCat)) {
+      if (!product.colorways || !product.colorways.length)
+        product.colorways = [{ id: Date.now(), name, image: product.image || null, imgId: product.imgId || null }];
+    } else {
+      if (product.colorways && product.colorways.length && !product.imgId && !product.image) {
+        product.imgId = product.colorways[0].imgId || null;
+        product.image = product.colorways[0].image || null;
+      }
+      product.colorways = [];
+      if (pending && pending !== imgOf(product)) {
+        if (product.imgId) await deleteImage(product.imgId);
+        product.imgId = await putImage(pending);
+        product.image = null;
+      } else if (!pending) {
+        if (product.imgId) await deleteImage(product.imgId);
+        product.imgId = null; product.image = null;
+      }
+    }
+    await saveProducts();
+    closeModal();
+    renderProducts();
+  });
+}
+
+async function deleteProduct(productId) {
+  const product = products.find(p => p.id === productId);
+  if (!product) return;
+  const n = (product.colorways || []).length;
+  const msg = n > 1
+    ? `Удалить «${product.name}» вместе с ${n} расцветками? Сделки останутся в истории.`
+    : `Удалить «${product.name}»? Сделки останутся в истории.`;
+  if (!confirm(msg)) return;
+  const usedElsewhere = id => products.some(p => p.id !== productId &&
+    (p.imgId === id || (p.colorways || []).some(c => c.imgId === id)));
+  const ids = new Set([product.imgId, ...(product.colorways || []).map(c => c.imgId)].filter(Boolean));
+  products = products.filter(p => p.id !== productId);
+  for (const id of ids) if (!usedElsewhere(id)) await deleteImage(id);
+  await saveProducts();
+  renderProducts();
+}
+
+function openColorwayForm(productId, colorwayId) {
+  const product = products.find(p => p.id === productId);
+  if (!product) return;
+  const cwItem = colorwayId ? (product.colorways || []).find(c => c.id === colorwayId) : null;
+
+  const f = openModal(cwItem ? 'Редактирование расцветки' : 'Новая расцветка', `
+    <label>Название расцветки</label>
+    <input type="text" class="v-name-input" placeholder="Например: белые штаны Adibas" style="margin-bottom:8px;" value="${cwItem ? escapeHtml(cwItem.name) : ''}">
+    <label>Фото</label>
+    <div class="dropzone v-zone">Вставьте <b>Ctrl+V</b>, перетащите файл или нажмите для выбора</div>
+    <div class="file-row">
+      <input type="file" accept="image/*" class="v-file-input hidden">
+      <img class="thumb-preview" style="display:${cwItem && imgOf(cwItem) ? 'block' : 'none'};" src="${cwItem && imgOf(cwItem) ? imgOf(cwItem) : ''}">
+      <button type="button" class="quick-btn v-rmimg" style="background:var(--panel);color:var(--muted);display:${cwItem && imgOf(cwItem) ? 'block' : 'none'};">Убрать фото</button>
+    </div>
+    <div class="error v-error"></div>
+    <div class="btn-row">
+      <button type="button" class="v-save">${cwItem ? 'Сохранить' : 'Добавить'}</button>
+      <button type="button" class="secondary v-cancel">Отмена</button>
+    </div>`);
+
+  const fileInput = f.querySelector('.v-file-input');
+  const thumb = f.querySelector('.thumb-preview');
+  const rm = f.querySelector('.v-rmimg');
+  let pendingImage = cwItem ? imgOf(cwItem) : null;
+  attachImageInput(f.querySelector('.v-zone'), fileInput, data => {
+    pendingImage = data;
+    thumb.src = data;
+    thumb.style.display = 'block';
+    rm.style.display = 'block';
+    f.querySelector('.v-zone').textContent = 'Фото добавлено — вставьте другое, чтобы заменить';
+  });
+  rm.addEventListener('click', () => {
+    pendingImage = null;
+    thumb.style.display = 'none';
+    rm.style.display = 'none';
+    fileInput.value = '';
+    f.querySelector('.v-zone').innerHTML = 'Вставьте <b>Ctrl+V</b>, перетащите файл или нажмите для выбора';
+  });
+
+  f.querySelector('.v-cancel').addEventListener('click', closeModal);
+  f.querySelector('.v-name-input').focus();
+  f.querySelector('.v-save').addEventListener('click', async () => {
+    const errEl = f.querySelector('.v-error');
+    const name = f.querySelector('.v-name-input').value.trim();
+    if (!name) { errEl.textContent = 'Введите название расцветки'; errEl.style.display = 'block'; return; }
+    errEl.style.display = 'none';
+    if (!product.colorways) product.colorways = [];
+    let cwImgId = null;
+    if (pendingImage) {
+      const unchanged = cwItem && pendingImage === imgOf(cwItem);
+      cwImgId = unchanged ? (cwItem.imgId || null) : await putImage(pendingImage);
+      if (unchanged && !cwImgId) cwImgId = await putImage(pendingImage);
+    }
+    if (cwItem) {
+      if (cwItem.imgId && cwItem.imgId !== cwImgId) await deleteImage(cwItem.imgId);
+      cwItem.name = name; cwItem.image = null; cwItem.imgId = cwImgId;
+    } else {
+      product.colorways.push({ id: Date.now(), name, image: null, imgId: cwImgId });
+    }
+    if (!product.imgId && !product.image && cwImgId) product.imgId = cwImgId;
+    await saveProducts();
+    closeModal();
+    renderProducts();
+  });
+}
+
+async function deleteColorway(productId, colorwayId) {
+  const p = products.find(x => x.id === productId);
+  if (!p) return;
+  const c = (p.colorways || []).find(x => x.id === colorwayId);
+  if (!c) return;
+  if ((p.colorways || []).length === 1) {
+    alert('Это последняя расцветка. Удалите товар целиком или сначала добавьте другую расцветку.');
+    return;
+  }
+  if (!confirm(`Удалить расцветку «${c.name}»? Сделки останутся в истории.`)) return;
+  p.colorways = p.colorways.filter(x => x.id !== colorwayId);
+  await saveProducts();
+  renderProducts();
+}
+
+/* ---------- catalog: bulk add / export / import ---------- */
+function productExists(cat, name, gender) {
+  const n = name.trim().toLowerCase();
+  return products.some(p => p.category === cat &&
+    (p.gender || null) === (gender || null) &&
+    (p.name.trim().toLowerCase() === n ||
+     (hasColorways(p.category) && (p.colorways || []).some(c => c.name.trim().toLowerCase() === n))));
+}
+
+function openBulkAdd() {
+  const f = openModal('Добавить списком', `
+    <label>Вид товара</label>
+    <select class="bk-cat" style="margin-bottom:8px;">
+      ${CATEGORIES.map(c => `<option value="${c}"${c === CLOTHING ? ' selected' : ''}>${c}</option>`).join('')}
+    </select>
+
+    <div class="bk-gender-wrap">
+      <label>Пол</label>
+      <select class="bk-gender" style="margin-bottom:8px;">
+        <option value="m">Мужское ♂</option>
+        <option value="f">Женское ♀</option>
+        <option value="">Унисекс</option>
+      </select>
+    </div>
+
+    <div class="checkrow bk-group-wrap">
+      <input type="checkbox" id="bk-group">
+      <label for="bk-group">Все строки — расцветки одного товара</label>
+    </div>
+    <div class="bk-groupname-wrap hidden" style="margin-bottom:8px;">
+      <label>Название товара</label>
+      <input type="text" class="bk-groupname" placeholder="Оставьте пустым — возьмём первую строку">
+    </div>
+
+    <label>Названия, по одному в строке</label>
+    <textarea class="bulk-area" placeholder="Белые штаны Adibas&#10;Черные штаны Adibas&#10;Синие штаны Adibas"></textarea>
+    <div class="hint" style="margin-top:6px;">
+      Можно вставить строки вида <b>Вид;Название;пол</b> — тогда поля выше игнорируются для этих строк.
+      Пол: <b>м</b>, <b>ж</b> или пусто. Дубликаты пропускаются.
+    </div>
+    <div class="bulk-report" id="bulk-report"></div>
+    <div class="error bk-error"></div>
+    <div class="btn-row" style="margin-top:10px;">
+      <button type="button" class="bk-save">Добавить</button>
+      <button type="button" class="secondary bk-cancel">Закрыть</button>
+    </div>`);
+
+  const catEl = f.querySelector('.bk-cat');
+  const genderWrap = f.querySelector('.bk-gender-wrap');
+  const groupWrap = f.querySelector('.bk-group-wrap');
+  const groupNameWrap = f.querySelector('.bk-groupname-wrap');
+  const groupCb = f.querySelector('#bk-group');
+
+  const syncUI = () => {
+    const cw = hasColorways(catEl.value);
+    genderWrap.classList.toggle('hidden', !cw);
+    groupWrap.classList.toggle('hidden', !cw);
+    groupNameWrap.classList.toggle('hidden', !cw || !groupCb.checked);
+  };
+  catEl.addEventListener('change', syncUI);
+  groupCb.addEventListener('change', syncUI);
+  syncUI();
+
+  f.querySelector('.bk-cancel').addEventListener('click', closeModal);
+  f.querySelector('.bk-save').addEventListener('click', async () => {
+    const errEl = f.querySelector('.bk-error');
+    const raw = f.querySelector('.bulk-area').value;
+    const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+    if (!lines.length) { errEl.textContent = 'Вставьте хотя бы одну строку'; errEl.style.display = 'block'; return; }
+    errEl.style.display = 'none';
+
+    const parseGender = g => {
+      const v = String(g || '').trim().toLowerCase();
+      if (['м', 'муж', 'm', 'male'].includes(v)) return 'm';
+      if (['ж', 'жен', 'f', 'female'].includes(v)) return 'f';
+      return null;
+    };
+
+    const baseCat = catEl.value;
+    const baseGender = hasColorways(baseCat) ? (f.querySelector('.bk-gender').value || null) : null;
+    const grouped = hasColorways(baseCat) && groupCb.checked;
+
+    let added = 0, skipped = 0;
+    const base = Date.now();
+
+    if (grouped) {
+      const names = lines.map(l => l.includes(';') ? l.split(';')[1].trim() : l).filter(Boolean);
+      const title = f.querySelector('.bk-groupname').value.trim() || names[0];
+      const fresh = names.filter(n => {
+        if (productExists(baseCat, n, baseGender)) { skipped++; return false; }
+        return true;
+      });
+      if (fresh.length) {
+        products.push({
+          id: base, category: baseCat, name: title, image: null, imgId: null,
+          gender: baseGender,
+          colorways: fresh.map((n, i) => ({ id: base + 1 + i, name: n, image: null, imgId: null }))
+        });
+        added = fresh.length;
+      }
+    } else {
+      lines.forEach((line, i) => {
+        let cat = baseCat, name = line, gender = baseGender;
+        if (line.includes(';')) {
+          const parts = line.split(';').map(x => x.trim());
+          if (parts[0] && CATEGORIES.includes(parts[0])) cat = parts[0];
+          name = parts[1] || parts[0];
+          gender = hasColorways(cat) ? parseGender(parts[2]) : null;
+        }
+        if (!name) return;
+        if (productExists(cat, name, gender)) { skipped++; return; }
+        const id = base + i * 2;
+        products.push({
+          id, category: cat, name, image: null, imgId: null,
+          gender: hasColorways(cat) ? gender : null,
+          colorways: hasColorways(cat) ? [{ id: id + 1, name, image: null, imgId: null }] : []
+        });
+        added++;
+      });
+    }
+
+    if (added) { imageIndex = null; await saveProducts(); renderProducts(); }
+    $('bulk-report').innerHTML =
+      `Добавлено: <b class="ok">${added}</b>` +
+      (skipped ? ` · пропущено дубликатов: <b class="skip">${skipped}</b>` : '');
+    f.querySelector('.bulk-area').value = '';
+  });
+
+  f.querySelector('.bulk-area').focus();
+}
+
+$('btn-bulk').addEventListener('click', openBulkAdd);
+
+$('btn-cat-export').addEventListener('click', () => {
+  const imgs = {};
+  products.forEach(p => {
+    [p.imgId, ...(p.colorways || []).map(c => c.imgId)].filter(Boolean).forEach(id => {
+      const v = getImage(id); if (v) imgs[id] = v;
+    });
+  });
+  const dump = { kind: 'catalog', version: 1, exportedAt: new Date().toISOString(), products, images: imgs };
+  downloadJson(JSON.stringify(dump), 'perekup-catalog-' + new Date().toISOString().slice(0, 10) + '.json');
+});
+
+$('btn-cat-import').addEventListener('click', () => $('cat-import-file').click());
+$('cat-import-file').addEventListener('change', async () => {
+  const file = $('cat-import-file').files[0];
+  if (!file) return;
+  const text = await file.text();
+  $('cat-import-file').value = '';
+
+  let incoming = null;
+  try {
+    const data = JSON.parse(text);
+    incoming = Array.isArray(data) ? { products: data } : data;
+  } catch (e) {
+    /* plain text / csv → treat every line as a name */
+    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+    if (!lines.length) { showBanner('Файл пустой или не читается.'); return; }
+    openBulkAdd();
+    setTimeout(() => {
+      const area = document.querySelector('.bulk-area');
+      if (area) { area.value = lines.join('\n'); area.focus(); }
+    }, 50);
+    return;
+  }
+
+  if (!incoming || !Array.isArray(incoming.products)) { showBanner('В файле нет каталога товаров.'); return; }
+
+  const mode = confirm(
+    `В файле товаров: ${incoming.products.length}.\n\n` +
+    `ОК — добавить к текущему каталогу (дубликаты пропустим).\n` +
+    `Отмена — заменить каталог целиком.`);
+
+  await restoreImages(incoming.images || {});
+
+  if (!mode) {
+    if (!confirm('Точно заменить весь каталог? Текущие товары будут удалены. Сделки останутся.')) return;
+    products = incoming.products;
+  } else {
+    let added = 0, skipped = 0;
+    incoming.products.forEach(p => {
+      const gender = p.gender || null;
+      if (productExists(p.category, p.name, gender)) { skipped++; return; }
+      products.push({ ...p, id: Date.now() + Math.floor(Math.random() * 100000) });
+      added++;
+    });
+    showBanner(`Добавлено товаров: ${added}${skipped ? `, пропущено дубликатов: ${skipped}` : ''}.`, true);
+  }
+
+  migrateProducts();
+  await extractImages();
+  imageIndex = null;
+  await saveProducts();
+  renderProducts();
+});
+
+/* ---------- assets ---------- */
+const ASSET_KEY = 'flip-assets';
+let assets = [];
+let editingAssetId = null;
+let aPendingImage = null;
+
+const aCategory = $('a-category');
+aCategory.innerHTML = [...CATEGORIES, OTHER].map(c => `<option value="${c}">${c}</option>`).join('');
+aCategory.value = 'Транспорт';
+const aFilterCat = $('a-filter-cat');
+aFilterCat.innerHTML = '<option value="">Все виды</option>' + [...CATEGORIES, OTHER].map(c => `<option value="${c}">${c}</option>`).join('');
+
+attachMoneyInput($('a-price'));
+attachMoneyInput($('a-value'));
+
+async function loadAssets() {
+  try {
+    const v = await readKey(ASSET_KEY);
+    assets = v ? JSON.parse(v) : [];
+  } catch (e) { assets = []; }
+  let migrated = false;
+  assets.forEach(a => {
+    if (a.value === undefined) { a.value = a.price; a.valueTotal = a.total; migrated = true; }
+  });
+  if (migrated) saveAssets();
+  await preloadImages();
+  await extractAssetImages();
+  renderAssets();
+}
+async function saveAssets(fromCloud) {
+  const r = await safeSet(ASSET_KEY, assets, 'имущество');
+  if (!fromCloud) markCloudDirty(ASSET_KEY);
+  if (typeof markFileDirty === 'function') markFileDirty();
+  return r;
+}
+async function saveProfileNames() { markCloudDirty(PROFILE_NAMES_KEY); return safeSet(PROFILE_NAMES_KEY, profileNames, 'названия профилей'); }
+async function saveCatColors() { markCloudDirty(COLORS_KEY); return safeSet(COLORS_KEY, catColors, 'цвета категорий'); }
+async function saveActionColors() { markCloudDirty(ACTCOLORS_KEY); return safeSet(ACTCOLORS_KEY, actionColors, 'цвета типов сделок'); }
+async function saveProfileCategories() { markCloudDirty(DEFCAT_KEY); return safeSet(DEFCAT_KEY, profileCategories, 'категории профилей'); }
+async function saveTheme() {
+  if (checkMirror()) mirrorWrite(THEME_KEY, JSON.stringify(activeTheme));
+  await writeKey(THEME_KEY, JSON.stringify(activeTheme));
+}
+
+const assetSpent = a => a.total + (a.upgrades || []).reduce((s, u) => s + u.spent, 0);
+const assetValue = a => (a.valueTotal || 0) + (a.upgrades || []).reduce((s, u) => s + (u.value || 0), 0);
+
+function aTotal() {
+  const price = moneyVal($('a-price'));
+  const value = moneyVal($('a-value'));
+  const qty = parseInt($('a-qty').value) || 0;
+  return { price, value, qty, total: price * qty, valueTotal: value * qty };
+}
+function updateAssetPreview() {
+  const { total, valueTotal, qty } = aTotal();
+  const el = $('a-preview');
+  if (!(total > 0) && !(valueTotal > 0)) { el.textContent = ''; return; }
+  const diff = valueTotal - total;
+  el.innerHTML = `Потрачено ${money(total)} · оценка ${money(valueTotal)}${qty > 1 ? ' (' + qty + ' шт.)' : ''}` +
+    (valueTotal > 0 && total > 0 ? ` · разница <b class="${diff >= 0 ? 'pos' : 'neg'}">${diff >= 0 ? '+' : '−'} ${money(diff)}</b>` : '');
+}
+['a-price','a-value','a-qty'].forEach(id => $(id).addEventListener('input', updateAssetPreview));
+
+attachImageInput($('a-zone'), $('a-file'), data => {
+  aPendingImage = data;
+  $('a-thumb').src = data;
+  $('a-thumb').style.display = 'block';
+  $('a-zone').textContent = 'Фото добавлено — вставьте другое, чтобы заменить';
+});
+
+function resetAssetForm() {
+  editingAssetId = null;
+  aPendingImage = null;
+  $('a-name').value = '';
+  $('a-price').value = '';
+  $('a-value').value = '';
+  $('a-qty').value = '1';
+  $('a-comment').value = '';
+  $('a-file').value = '';
+  $('a-thumb').style.display = 'none';
+  $('a-zone').innerHTML = 'Вставьте <b>Ctrl+V</b>, перетащите файл или нажмите для выбора';
+  $('a-preview').textContent = '';
+  $('a-error').style.display = 'none';
+  $('a-submit').textContent = '+ Добавить';
+  $('asset-form-title').textContent = 'Добавить имущество';
+  $('a-cancel').classList.add('hidden');
+}
+$('a-cancel').addEventListener('click', resetAssetForm);
+
+$('asset-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const errEl = $('a-error');
+  const name = $('a-name').value.trim();
+  const { price, value, qty, total, valueTotal } = aTotal();
+  if (!name) { errEl.textContent = 'Введите название'; errEl.style.display = 'block'; return; }
+  if (!(qty >= 1)) { errEl.textContent = 'Количество должно быть не меньше 1'; errEl.style.display = 'block'; return; }
+  if (!(total > 0)) { errEl.textContent = 'Укажите, сколько потрачено'; errEl.style.display = 'block'; return; }
+  if (!(valueTotal > 0)) { errEl.textContent = 'Укажите реальную оценку'; errEl.style.display = 'block'; return; }
+  errEl.style.display = 'none';
+
+  let aImgId = null;
+  if (aPendingImage) {
+    const existing = editingAssetId ? assets.find(a => a.id === editingAssetId) : null;
+    aImgId = (existing && imgOf(existing) === aPendingImage)
+      ? (existing.imgId || await putImage(aPendingImage))
+      : await putImage(aPendingImage);
+  }
+  const rec = {
+    id: editingAssetId || Date.now(),
+    category: aCategory.value,
+    name, price, qty, total, value, valueTotal,
+    image: null, imgId: aImgId,
+    comment: $('a-comment').value.trim()
+  };
+  if (editingAssetId) {
+    const i = assets.findIndex(a => a.id === editingAssetId);
+    if (i >= 0) {
+      if (aPendingImage === null) { rec.imgId = assets[i].imgId || null; rec.image = assets[i].image || null; }
+      rec.upgrades = assets[i].upgrades || [];
+      assets[i] = rec;
+    }
+  } else { rec.upgrades = []; assets.push(rec); }
+  await saveAssets();
+  resetAssetForm();
+  renderAssets();
+});
+
+function filteredAssets() {
+  const q = $('a-search').value.trim().toLowerCase();
+  const cat = aFilterCat.value;
+  const words = q ? q.split(/\s+/).filter(Boolean) : [];
+  return assets.filter(a => {
+    if (cat && a.category !== cat) return false;
+    if (words.length) { const n = a.name.toLowerCase(); if (!words.every(w => n.includes(w))) return false; }
+    return true;
+  });
+}
+
+function renderAssets() {
+  const list = $('assets-list'), empty = $('assets-empty');
+  list.innerHTML = '';
+
+  const grand = assets.reduce((s, a) => s + assetSpent(a), 0);
+  const grandValue = assets.reduce((s, a) => s + assetValue(a), 0);
+  const units = assets.reduce((s, a) => s + a.qty, 0);
+  $('asset-total').textContent = money(grand);
+  $('asset-total-sub').textContent = assets.length + ' позиций · ' + units + ' шт.';
+  $('asset-value').textContent = money(grandValue);
+  $('asset-value-sub').textContent = 'если продать сейчас';
+  const diff = grandValue - grand;
+  const dEl = $('asset-diff');
+  dEl.textContent = (diff >= 0 ? '+ ' : '− ') + money(diff);
+  dEl.className = 'value ' + (diff >= 0 ? 'pos' : 'neg');
+  $('asset-diff-sub').textContent = grand ? Math.round(diff / grand * 100) + '% к вложенному' : '';
+
+  const byCat = {};
+  assets.forEach(a => { byCat[a.category] = (byCat[a.category] || 0) + assetValue(a); });
+  const top = Object.entries(byCat).sort((a, b) => b[1] - a[1])[0];
+  $('asset-top').textContent = top ? top[0] : '—';
+  $('asset-top-sub').textContent = top ? money(top[1]) + ' по оценке' : '';
+
+  const rows = filteredAssets();
+  const shownSpent = rows.reduce((s, a) => s + assetSpent(a), 0);
+  const shownValue = rows.reduce((s, a) => s + assetValue(a), 0);
+  $('a-summary').innerHTML = rows.length
+    ? `Позиций: ${rows.length} · потрачено <b style="color:var(--blue)">${money(shownSpent)}</b> · оценка <b style="color:var(--blue)">${money(shownValue)}</b>`
+    : '';
+
+  if (!rows.length) {
+    empty.style.display = 'block';
+    empty.textContent = assets.length ? 'Ничего не найдено.' : 'Пока пусто. Добавьте имущество выше.';
+    return;
+  }
+  empty.style.display = 'none';
+
+  [...CATEGORIES, OTHER].forEach(cat => {
+    const group = rows.filter(a => a.category === cat).sort((a, b) => assetValue(b) - assetValue(a));
+    if (!group.length) return;
+    const sumSpent = group.reduce((s, a) => s + assetSpent(a), 0);
+    const sumValue = group.reduce((s, a) => s + assetValue(a), 0);
+    const title = document.createElement('div');
+    title.className = 'cat-group-title';
+    title.style.color = catColor(cat);
+    title.textContent = `${cat} — потрачено ${money(sumSpent)} · оценка ${money(sumValue)}`;
+    list.appendChild(title);
+
+    group.forEach(a => {
+      const el = document.createElement('div');
+      el.className = 'asset-card';
+      el.style.borderLeftColor = catColor(a.category);
+      el.innerHTML = `
+        ${imgOf(a) ? `<img class="asset-img" loading="lazy" decoding="async" src="${imgOf(a)}">` : `<div class="asset-img empty">нет фото</div>`}
+        <div class="asset-body">
+          <div class="asset-head">
+            <div style="min-width:0;">
+              <div class="asset-name">${escapeHtml(a.name)}</div>
+              <div class="asset-meta">
+                ${a.qty > 1 ? `<span class="chip muted">x${a.qty}</span>` : ''}
+                <span class="chip muted">потрачено ${money(assetSpent(a))}</span>
+                ${(a.upgrades || []).length ? `<span class="chip muted">+ ${(a.upgrades || []).length} доп. расход${(a.upgrades || []).length === 1 ? '' : 'а'}</span>` : ''}
+                ${(() => { const d = assetValue(a) - assetSpent(a); return `<span class="chip ${d >= 0 ? 'green' : 'red'}">${d >= 0 ? '+' : '−'} ${money(d)}</span>`; })()}
+              </div>
+            </div>
+            <div style="display:flex; align-items:center; gap:6px; flex-shrink:0;">
+              <div class="asset-value">${money(assetValue(a))}</div>
+            </div>
+          </div>
+          ${a.comment ? `<div class="asset-comment">${escapeHtml(a.comment)}</div>` : ''}
+          ${(a.upgrades || []).length ? `<div class="upg-list">
+            <div style="font-size:11px; color:var(--muted); margin-bottom:4px;">База: ${money(a.total)}</div>
+            ${a.upgrades.map(u => `
+              <div class="upg-row">
+                <div class="u-name">${escapeHtml(u.name)}<div class="u-cat">${escapeHtml(u.category)}</div></div>
+                <div class="u-val">+ ${money(u.spent)}${u.value ? ' → ' + money(u.value) : ''}</div>
+                <button class="u-del" data-asset="${a.id}" data-upg="${u.id}" aria-label="Удалить расход">✕</button>
+              </div>`).join('')}
+          </div>` : ''}
+          <div class="deal-foot">
+            <div class="quick-btns">
+              <button class="quick-btn a-upg" data-id="${a.id}" style="background:var(--panel-2); color:var(--gold);">+ Доп. расход</button>
+              <button class="quick-btn a-edit" data-id="${a.id}" style="background:var(--panel-2);">Изменить</button>
+              <button class="quick-btn a-del" data-id="${a.id}" style="background:var(--panel-2); color:var(--red);">Удалить</button>
+            </div>
+          </div>
+        </div>`;
+      list.appendChild(el);
+    });
+  });
+
+  list.querySelectorAll('.a-edit').forEach(b => b.addEventListener('click', () => startAssetEdit(Number(b.dataset.id))));
+  list.querySelectorAll('.a-del').forEach(b => b.addEventListener('click', () => deleteAsset(Number(b.dataset.id))));
+  list.querySelectorAll('.a-upg').forEach(b => b.addEventListener('click', () =>
+    openUpgradeForm(Number(b.dataset.id))));
+  list.querySelectorAll('.u-del').forEach(b => b.addEventListener('click', () =>
+    deleteUpgrade(Number(b.dataset.asset), Number(b.dataset.upg))));
+}
+
+function openUpgradeForm(assetId) {
+  const asset = assets.find(a => a.id === assetId);
+  if (!asset) return;
+
+  const f = openModal('Доп. расход', `
+    <label>Вид расхода</label>
+    <select class="u-cat-select" style="margin-bottom:8px;">
+      ${[...CATEGORIES, OTHER].map(c => `<option value="${c}">${c}</option>`).join('')}
+    </select>
+    <label>Что добавили</label>
+    <input type="text" class="u-name-input" placeholder="Например: Автопилот" style="margin-bottom:8px;">
+    <div class="row">
+      <div>
+        <label>Потрачено</label>
+        <input type="text" class="u-spent" inputmode="numeric" placeholder="0" autocomplete="off">
+      </div>
+      <div>
+        <label>Прибавка к оценке</label>
+        <input type="text" class="u-value" inputmode="numeric" placeholder="0" autocomplete="off">
+      </div>
+    </div>
+    <div class="hint">Прибавку к оценке можно оставить пустой — тогда расход увеличит затраты, но не стоимость имущества.</div>
+    <div class="error u-error"></div>
+    <div class="btn-row">
+      <button type="button" class="u-save">Добавить расход</button>
+      <button type="button" class="secondary u-cancel">Отмена</button>
+    </div>`);
+
+  const spentEl = f.querySelector('.u-spent');
+  const valueEl = f.querySelector('.u-value');
+  attachMoneyInput(spentEl);
+  attachMoneyInput(valueEl);
+  f.querySelector('.u-name-input').focus();
+
+  f.querySelector('.u-cancel').addEventListener('click', closeModal);
+  f.querySelector('.u-save').addEventListener('click', async () => {
+    const errEl = f.querySelector('.u-error');
+    const name = f.querySelector('.u-name-input').value.trim();
+    const spent = moneyVal(spentEl);
+    const value = moneyVal(valueEl);
+    if (!name) { errEl.textContent = 'Введите, что добавили'; errEl.style.display = 'block'; return; }
+    if (!(spent > 0)) { errEl.textContent = 'Укажите сумму расхода'; errEl.style.display = 'block'; return; }
+    errEl.style.display = 'none';
+    if (!asset.upgrades) asset.upgrades = [];
+    asset.upgrades.push({ id: Date.now(), category: f.querySelector('.u-cat-select').value, name, spent, value });
+    await saveAssets();
+    closeModal();
+    renderAssets();
+  });
+}
+
+async function deleteUpgrade(assetId, upgId) {
+  const a = assets.find(x => x.id === assetId);
+  if (!a) return;
+  const u = (a.upgrades || []).find(x => x.id === upgId);
+  if (!u) return;
+  if (!confirm(`Удалить расход «${u.name}» на ${money(u.spent)}?`)) return;
+  a.upgrades = a.upgrades.filter(x => x.id !== upgId);
+  await saveAssets();
+  renderAssets();
+}
+
+function startAssetEdit(id) {
+  const a = assets.find(x => x.id === id);
+  if (!a) return;
+  editingAssetId = id;
+  aCategory.value = a.category;
+  $('a-name').value = a.name;
+  setMoney($('a-price'), a.price);
+  setMoney($('a-value'), a.value !== undefined ? a.value : a.price);
+  $('a-qty').value = a.qty;
+  $('a-comment').value = a.comment || '';
+  aPendingImage = imgOf(a);
+  if (aPendingImage) { $('a-thumb').src = aPendingImage; $('a-thumb').style.display = 'block'; }
+  else $('a-thumb').style.display = 'none';
+  $('a-submit').textContent = 'Сохранить изменения';
+  $('asset-form-title').textContent = 'Редактирование';
+  $('a-cancel').classList.remove('hidden');
+  updateAssetPreview();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+async function deleteAsset(id) {
+  const a = assets.find(x => x.id === id);
+  if (!a) return;
+  const up = (a.upgrades || []).length;
+  if (!confirm(`Удалить «${a.name}» из имущества?\n\nПотрачено ${money(assetSpent(a))}${up ? `, доп. расходов: ${up}` : ''}.`)) return;
+  assets = assets.filter(x => x.id !== id);
+  if (a.imgId && !assets.some(x => x.imgId === a.imgId)) await deleteImage(a.imgId);
+  if (editingAssetId === id) resetAssetForm();
+  await saveAssets();
+  renderAssets();
+}
+
+$('a-search').addEventListener('input', renderAssets);
+aFilterCat.addEventListener('change', renderAssets);
+
+/* ---------- settings: theme ---------- */
+function renderThemeSettings() {
+  const box = $('theme-list');
+  if (!box) return;
+  box.innerHTML = Object.entries(THEMES).map(([key, t]) => `
+    <button type="button" class="theme-card${activeTheme === key ? ' selected' : ''}" data-theme="${key}"
+      style="background:${t.vars['--panel']}; border-color:${activeTheme === key ? t.vars['--gold'] : t.vars['--line']}; color:${t.vars['--text']}">
+      <div class="theme-name">
+        <span>${escapeHtml(t.name)}</span>
+        ${activeTheme === key ? `<span class="theme-check" style="color:${t.vars['--gold']}">✓</span>` : ''}
+      </div>
+      <div class="theme-swatches">
+        <i style="background:${t.vars['--bg']}"></i>
+        <i style="background:${t.vars['--green']}"></i>
+        <i style="background:${t.vars['--red']}"></i>
+        <i style="background:${t.vars['--gold']}"></i>
+        <i style="background:${t.vars['--blue']}"></i>
+      </div>
+    </button>`).join('');
+
+  box.querySelectorAll('.theme-card').forEach(b => b.addEventListener('click', async () => {
+    applyTheme(b.dataset.theme);
+    await saveTheme();
+    renderThemeSettings();
+  }));
+}
+
+/* ---------- settings: default category per profile ---------- */
+function renderProfileCategorySettings() {
+  const box = $('profcat-list');
+  if (!box) return;
+  box.innerHTML = PROFILES.map(n => `
+    <div class="color-row">
+      <div class="cr-name">${escapeHtml(profileLabel(n))}</div>
+      <select data-profile="${n}" style="width:auto; min-width:150px;">
+        ${[...CATEGORIES, OTHER].map(c =>
+          `<option value="${c}"${defaultCatFor(n) === c ? ' selected' : ''}>${c}</option>`).join('')}
+      </select>
+    </div>`).join('');
+
+  box.querySelectorAll('select').forEach(sel => {
+    sel.addEventListener('change', async () => {
+      profileCategories[sel.dataset.profile] = sel.value;
+      await saveProfileCategories();
+      if (!isAllProfiles() && Number(sel.dataset.profile) === activeProfile) applyProfileDefaultCategory();
+    });
+  });
+}
+
+/* ---------- settings: action colors ---------- */
+function renderActionColorSettings() {
+  const box = $('action-color-list');
+  if (!box) return;
+  box.innerHTML = ACTIONS.map(a => `
+    <div class="color-row">
+      <div class="cr-bar" style="background:${actionColor(a)}"></div>
+      <div class="cr-name">${escapeHtml(a)}</div>
+      <span class="chip" style="color:${actionColor(a)}">${escapeHtml(a)}</span>
+      <input type="color" value="${actionColor(a)}" data-action="${escapeHtml(a)}">
+    </div>`).join('');
+
+  box.querySelectorAll('input[type="color"]').forEach(inp => {
+    const row = inp.closest('.color-row');
+    const bar = row.querySelector('.cr-bar');
+    const chip = row.querySelector('.chip');
+    inp.addEventListener('input', () => {
+      actionColors[inp.dataset.action] = inp.value;
+      bar.style.background = inp.value;
+      chip.style.color = inp.value;
+    });
+    inp.addEventListener('change', async () => {
+      actionColors[inp.dataset.action] = inp.value;
+      await saveActionColors();
+      applyActionUI();
+      renderAll();
+    });
+  });
+}
+$('action-colors-reset').addEventListener('click', async () => {
+  actionColors = {};
+  await saveActionColors();
+  renderActionColorSettings();
+  applyActionUI();
+  renderAll();
+});
+
+/* ---------- settings: colors ---------- */
+function renderColorSettings() {
+  const box = $('color-list');
+  if (!box) return;
+  box.innerHTML = [...CATEGORIES, OTHER].map(c => `
+    <div class="color-row">
+      <div class="cr-bar" style="background:${catColor(c)}"></div>
+      <div class="cr-name">${escapeHtml(c)}</div>
+      <span class="chip cat" style="color:${catColor(c)}">${escapeHtml(c)}</span>
+      <input type="color" value="${catColor(c)}" data-cat="${escapeHtml(c)}">
+    </div>`).join('');
+
+  box.querySelectorAll('input[type="color"]').forEach(inp => {
+    const row = inp.closest('.color-row');
+    const bar = row.querySelector('.cr-bar');
+    const chip = row.querySelector('.chip.cat');
+    inp.addEventListener('input', () => {
+      /* update this row in place — re-rendering would close the OS colour picker */
+      catColors[inp.dataset.cat] = inp.value;
+      bar.style.background = inp.value;
+      chip.style.color = inp.value;
+    });
+    inp.addEventListener('change', async () => {
+      catColors[inp.dataset.cat] = inp.value;
+      await saveCatColors();
+      renderAll();
+      renderProducts();
+      renderAssets();
+    });
+  });
+}
+$('colors-reset').addEventListener('click', async () => {
+  catColors = {};
+  await saveCatColors();
+  renderColorSettings();
+  renderAll();
+  renderProducts();
+  renderAssets();
+});
+
+/* ---------- dump helpers ---------- */
+function buildDump() {
+  return {
+    version: 5, appVersion: APP_VERSION, exportedAt: new Date().toISOString(),
+    transactions, products, assets, images: collectImages(),
+    profileNames, catColors, actionColors, profileCategories, activeTheme, activeProfile
+  };
+}
+
+function downloadJson(text, filename) {
+  const blob = new Blob([text], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+async function applyDump(data) {
+  if (!data || !Array.isArray(data.transactions)) throw new Error('bad dump');
+  transactions = data.transactions || [];
+  products = data.products || [];
+  assets = data.assets || [];
+  profileNames = data.profileNames || {};
+  catColors = data.catColors || {};
+  actionColors = data.actionColors || {};
+  profileCategories = data.profileCategories || {};
+  if (data.activeTheme) applyTheme(data.activeTheme);
+  await restoreImages(data.images);
+  migrateProducts();
+  await extractImages();
+  await extractAssetImages();
+  invalidateTx();
+  imageIndex = null;
+  await saveTx(); await saveProducts(); await saveAssets(); await saveProfileNames();
+  await saveCatColors(); await saveProfileCategories(); await saveActionColors(); await saveTheme();
+  renderAll(); renderProducts(); renderAssets();
+}
+
+/* ---------- data file (works even when browser storage is unreliable) ---------- */
+const isFileUrl = location.protocol === 'file:';
+const canPickFiles = 'showOpenFilePicker' in window;
+let dataFile = null;          // FileSystemFileHandle
+let fileSaveTimer = null;
+let fileSaveState = '';
+
+function markFileDirty() {
+  if (!dataFile) return;
+  clearTimeout(fileSaveTimer);
+  fileSaveTimer = setTimeout(flushDataFile, 800);
+}
+
+async function flushDataFile() {
+  if (!dataFile) return;
+  try {
+    const perm = await dataFile.queryPermission({ mode: 'readwrite' });
+    if (perm !== 'granted' && (await dataFile.requestPermission({ mode: 'readwrite' })) !== 'granted') {
+      fileSaveState = 'нет разрешения на запись';
+      renderDataFileSettings();
+      return;
+    }
+    const w = await dataFile.createWritable();
+    await w.write(JSON.stringify(buildDump()));
+    await w.close();
+    fileSaveState = 'сохранено ' + new Date().toLocaleTimeString('ru-RU').slice(0, 5);
+  } catch (e) {
+    fileSaveState = 'ошибка записи: ' + (e.message || e);
+  }
+  renderDataFileSettings();
+}
+
+async function attachDataFile(handle, load) {
+  dataFile = handle;
+  if (load) {
+    try {
+      const file = await handle.getFile();
+      const text = await file.text();
+      if (text.trim()) {
+        await applyDump(JSON.parse(text));
+        showBanner('Данные загружены из файла.', true);
+      }
+    } catch (e) {
+      showBanner('Не удалось прочитать файл данных: ' + escapeHtml(String(e.message || e)));
+      dataFile = null;
+      renderDataFileSettings();
+      return;
+    }
+  }
+  await flushDataFile();
+  renderDataFileSettings();
+}
+
+function renderDataFileSettings() {
+  const hint = $('datafile-hint');
+  const status = $('datafile-status');
+  if (!hint) return;
+
+  if (!canPickFiles) {
+    hint.textContent = 'Этот браузер не умеет писать в файл напрямую. Работает в Chrome и Edge на компьютере.';
+    $('btn-openfile').classList.add('hidden');
+    $('btn-newfile').classList.add('hidden');
+    return;
+  }
+
+  hint.innerHTML = isFileUrl
+    ? 'Программа открыта как файл с диска, и браузер в этом режиме может терять своё хранилище между открытиями. ' +
+      'Надёжный способ — держать данные в отдельном файле: выберите его один раз за сеанс, дальше всё пишется туда автоматически.'
+    : 'Можно держать данные в отдельном файле на диске — он будет обновляться автоматически при каждом изменении.';
+
+  status.textContent = dataFile
+    ? `Файл: ${dataFile.name}${fileSaveState ? ' · ' + fileSaveState : ''}`
+    : 'Файл не выбран — данные хранятся только в браузере.';
+
+  $('btn-detachfile').classList.toggle('hidden', !dataFile);
+}
+
+$('btn-openfile').addEventListener('click', async () => {
+  try {
+    const [handle] = await window.showOpenFilePicker({
+      types: [{ description: 'Данные калькулятора', accept: { 'application/json': ['.json'] } }]
+    });
+    await attachDataFile(handle, true);
+  } catch (e) { /* cancelled */ }
+});
+
+$('btn-newfile').addEventListener('click', async () => {
+  try {
+    const handle = await window.showSaveFilePicker({
+      suggestedName: 'perekup-data.json',
+      types: [{ description: 'Данные калькулятора', accept: { 'application/json': ['.json'] } }]
+    });
+    await attachDataFile(handle, false);
+    showBanner('Файл создан — данные пишутся в него автоматически.', true);
+  } catch (e) { /* cancelled */ }
+});
+
+$('btn-detachfile').addEventListener('click', () => {
+  dataFile = null;
+  fileSaveState = '';
+  renderDataFileSettings();
+});
+
+window.addEventListener('beforeunload', () => { if (dataFile) flushDataFile(); });
+
+/* ---------- storage diagnostics ---------- */
+async function runDiagnostics() {
+  const out = $('diag-out');
+  out.innerHTML = 'Проверяю…';
+  const lines = [];
+  const probeKey = 'flip-probe';
+  const probeVal = 'probe-' + Date.now();
+
+  // 1. main store write + read back
+  let mainWrite = false, mainRead = false;
+  try {
+    await Store.set(probeKey, probeVal, false);
+    mainWrite = true;
+  } catch (e) { lines.push(`<span class="bad">Основное хранилище: запись не прошла (${escapeHtml(String(e.message || e))})</span>`); }
+  try {
+    const r = await Store.get(probeKey, false);
+    mainRead = !!(r && r.value === probeVal);
+  } catch (e) {}
+  if (mainWrite || mainRead) {
+    lines.push(mainRead
+      ? '<span class="ok">Основное хранилище: запись и чтение работают</span>'
+      : '<span class="bad">Основное хранилище: записало, но прочитать обратно не смогло</span>');
+  }
+
+  // 2. browser copy
+  let lsOk = false;
+  try {
+    localStorage.setItem('mirror:' + probeKey, probeVal);
+    lsOk = localStorage.getItem('mirror:' + probeKey) === probeVal;
+    localStorage.removeItem('mirror:' + probeKey);
+  } catch (e) {
+    lines.push(`<span class="bad">Копия в браузере: недоступна (${escapeHtml(String(e.message || e))})</span>`);
+  }
+  if (lsOk) lines.push('<span class="ok">Копия в браузере: работает</span>');
+
+  // 3. what is actually stored right now
+  let storedDeals = '—';
+  try {
+    const v = await readKey(TX_KEY);
+    storedDeals = v ? JSON.parse(v).length + ' шт.' : 'пусто';
+  } catch (e) { storedDeals = 'не читается'; }
+  lines.push(`Сейчас в хранилище сделок: <b>${storedDeals}</b>, на экране: <b>${transactions.length} шт.</b>`);
+
+  if (!mainRead && !lsOk) {
+    lines.push('<span class="bad">Данные не переживут обновление страницы.</span>');
+    lines.push('<span class="warn">Скачайте резервную копию и откройте файл программы с компьютера — там хранилище браузера обычно работает.</span>');
+  } else if (!mainRead && lsOk) {
+    lines.push('<span class="warn">Работает только копия в браузере — данные сохранятся, но лучше делать резервные копии.</span>');
+  }
+
+  out.innerHTML = lines.join('<br>');
+}
+$('btn-diag').addEventListener('click', runDiagnostics);
+
+$('cloud-toggle').addEventListener('change', async () => {
+  cloudOn = $('cloud-toggle').checked;
+  try { localStorage.setItem('flip-cloud-on', cloudOn ? '1' : '0'); } catch (e) {}
+  renderCloudStatus();
+  if (cloudOn) await pullFromCloud();
+});
+$('btn-cloud-push').addEventListener('click', async () => {
+  SYNCED_KEYS.forEach(k => cloudPending.add(k));
+  await flushCloud();
+  if (cloudState === 'ok') showBanner('Данные отправлены в облако.', true);
+});
+$('btn-cloud-pull').addEventListener('click', () => pullFromCloud());
+
+/* ---------- backup ---------- */
+function collectImages() {
+  const out = {};
+  const add = id => { if (id) { const v = getImage(id); if (v) out[id] = v; } };
+  products.forEach(p => { add(p.imgId); (p.colorways || []).forEach(c => add(c.imgId)); });
+  assets.forEach(a => add(a.imgId));
+  return out;
+}
+async function restoreImages(map) {
+  if (!map) return;
+  for (const [id, data] of Object.entries(map)) {
+    imageCache.set(id, data);
+    if (checkMirror()) mirrorWrite(IMG_PREFIX + id, data);
+    await writeKey(IMG_PREFIX + id, data);
+  }
+}
+
+$('btn-export').addEventListener('click', () => {
+  downloadJson(JSON.stringify(buildDump()), 'perekup-backup-' + new Date().toISOString().slice(0, 10) + '.json');
+});
+$('btn-import').addEventListener('click', () => $('import-file').click());
+
+
+$('import-file').addEventListener('change', async () => {
+  const f = $('import-file').files[0];
+  if (!f) return;
+  try {
+    const data = JSON.parse(await f.text());
+    if (!data || !Array.isArray(data.transactions)) throw new Error('bad file');
+    if (!confirm('Заменить текущие данные содержимым файла?\n\nТекущие сделки, товары и имущество будут перезаписаны.')) return;
+    await applyDump(data);
+    showBanner('Копия загружена.', true);
+  } catch (e) {
+    showBanner('Не удалось прочитать файл копии.');
+  }
+  $('import-file').value = '';
+});
+
+/* if the main store lags behind what we just loaded, rewrite it quietly */
+async function reconcileStores() {
+  const pairs = [
+    [TX_KEY, transactions], [PROD_KEY, products], [ASSET_KEY, assets]
+  ];
+  for (const [key, value] of pairs) {
+    const payload = JSON.stringify(value);
+    let current = null;
+    try { const r = await Store.get(key, false); if (r && r.value) current = r.value; } catch (e) {}
+    if (current !== payload) await safeSet(key, value, key);
+  }
+}
+
+function checkEmptyWithMirror() {
+  if (transactions.length || products.length || assets.length) return;
+  const has = ['flip-transactions-v3', 'flip-products', 'flip-assets'].some(k => {
+    const v = mirrorRead(k);
+    try { return v && JSON.parse(v).length > 0; } catch (e) { return false; }
+  });
+  if (has) showBanner('Данные не подтянулись из основного хранилища, но локальная копия найдена. Перезагрузите страницу — если не поможет, загрузите резервную копию через блок «Данные» внизу.');
+}
+
+function updateStoreInfo() {
+  const size = k => { try { return Math.round(JSON.stringify(k).length / 1024); } catch (e) { return 0; } };
+  let imgKb = 0;
+  imageCache.forEach(v => { imgKb += v.length; });
+  $('store-info').textContent =
+    `Версия ${APP_VERSION} от ${APP_BUILD_DATE} · Хранилище: ${STORE_MODE === 'host' ? 'встроенное' : 'браузер (localStorage)'}` +
+    `${checkMirror() ? ' + копия в браузере' : ' (копия в браузере недоступна)'}` +
+    `${pendingSaves.size ? ' · ждут записи: ' + pendingSaves.size : ' · синхронно'} · ` +
+    `сделки ${size(transactions)} КБ · каталог ${size(products)} КБ · имущество ${size(assets)} КБ · ` +
+    `фото ${Math.round(imgKb / 1024)} КБ (${imageCache.size} шт.)`;
+}
+
+$('app-version').textContent = 'v' + APP_VERSION;
+$('app-version').title = 'Сборка от ' + APP_BUILD_DATE;
+
+(async () => {
+  await loadAll();
+  applyProfileDefaultCategory();
+  await loadAssets();
+  try { cloudOn = localStorage.getItem('flip-cloud-on') !== '0'; } catch (e) {}
+  $('cloud-toggle').checked = cloudOn;
+  checkEmptyWithMirror();
+  await reconcileStores();
+
+  if (cloudOn) {
+    await pullFromCloud(true);
+    /* first run on a fresh device: seed the cloud with whatever is here */
+    if (!transactions.length && !products.length && !assets.length) renderCloudStatus();
+    setInterval(() => { if (cloudOn && !document.hidden) pullFromCloud(true); }, 60000);
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && cloudOn && Date.now() - lastPullAt > 15000) pullFromCloud(true);
+    });
+    window.addEventListener('beforeunload', () => { if (cloudPending.size) flushCloud(); });
+  }
+  renderCloudStatus();
+  if (isFileUrl && canPickFiles && !transactions.length && !products.length) {
+    showBanner(
+      'Программа открыта файлом с диска. В этом режиме браузер может не сохранять данные между открытиями — ' +
+      'в «Настройках» выберите файл данных, и всё будет писаться прямо в него.'
+    );
+  }
+  updateStoreInfo();
+
+})();
+</script>
+</body>
+</html>
