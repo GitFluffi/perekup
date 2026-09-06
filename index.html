@@ -922,7 +922,7 @@
 </div>
 
 <script>
-const APP_VERSION = '2.2';
+const APP_VERSION = '2.3';
 const APP_BUILD_DATE = '04.09.26';
 const TX_KEY = 'flip-transactions-v3';
 const OLD_TX_KEY = 'flip-transactions-v2';
@@ -1781,6 +1781,7 @@ function costBasisOf(t) {
 }
 /* realized effect on daily profit */
 function realizedOf(t) {
+  if (t.transfer) return 0;
   if (t.action === 'Купил') return 0;
   if (t.action === 'Продал') return t.total - costBasisOf(t);
   if (t.action === 'Получил') return t.total;
@@ -2330,6 +2331,7 @@ function renderInventory() {
           <div class="quick-btns">
             <button class="quick-btn sell" data-sell="${lot.id}">Продал</button>
             <button class="quick-btn expense" data-extra="${lot.id}">Доп. расходы</button>
+            <button class="quick-btn" data-toasset="${lot.id}">В имущество</button>
             <span class="buy-wrap">
               <button class="quick-btn" data-buymenu="${lot.id}">Купил ▾</button>
               <span class="buy-menu" id="buymenu-${lot.id}">
@@ -2350,6 +2352,7 @@ function renderInventory() {
   list.querySelectorAll('[data-rebuy]').forEach(b => b.addEventListener('click', () => repeatDeal(Number(b.dataset.rebuy), 'Купил')));
   list.querySelectorAll('[data-other]').forEach(b => b.addEventListener('click', () => openSiblingPicker(Number(b.dataset.other))));
   list.querySelectorAll('[data-extra]').forEach(b => b.addEventListener('click', () => openLotExtraForm(Number(b.dataset.extra))));
+  list.querySelectorAll('[data-toasset]').forEach(b => b.addEventListener('click', () => openMoveToAsset(Number(b.dataset.toasset))));
   list.querySelectorAll('[data-buymenu]').forEach(b => b.addEventListener('click', e => {
     e.stopPropagation();
     const menu = $('buymenu-' + b.dataset.buymenu);
@@ -2621,11 +2624,11 @@ function renderHistory(listId, emptyId, rows) {
         ? `<span class="chip profile">${escapeHtml(profileLabel(profileOf(t)))}</span>` : '',
       catChip(t.category),
       genderChip(t.gender),
-      actionChip(t.action),
+      t.transfer ? `<span class="chip" style="color:var(--gold)">перенос</span>` : actionChip(t.action),
       t.qty > 1 ? `<span class="chip">x${t.qty}</span>` : '',
       `<span class="chip" style="color:${actionColor(t.action)}">${isBuy ? '' : pos ? '+ ' : '− '}${money(t.total)}</span>`,
       ex ? `<span class="chip red">доп. ${money(ex)}</span>` : '',
-      net !== null ? `<span class="chip ${net >= 0 ? 'green' : 'red'}">чистыми ${net >= 0 ? '+' : '−'} ${money(net)}</span>` : '',
+      (net !== null && !t.transfer) ? `<span class="chip ${net >= 0 ? 'green' : 'red'}">чистыми ${net >= 0 ? '+' : '−'} ${money(net)}</span>` : '',
       t.qty > 1 ? `<span class="chip muted">за шт: ${money(t.price)}</span>` : '',
       t.cash ? `<span class="chip muted">наличка</span>` : ''
     ].filter(Boolean).join('');
@@ -2752,7 +2755,7 @@ function inRange(dateStr, daysBack) {
 }
 function renderStatCards() {
   [['today',1],['week',7],['month',30]].forEach(([key, days]) => {
-    const rows = scoped().filter(t => inRange(t.date, days) && t.action !== 'Купил');
+    const rows = scoped().filter(t => inRange(t.date, days) && t.action !== 'Купил' && !t.transfer);
     const net = rows.reduce((s, t) => s + realizedOf(t), 0);
     const el = $('stat-' + key);
     el.textContent = (net >= 0 ? '+ ' : '− ') + money(net);
@@ -2807,6 +2810,7 @@ function buildItemStats() {
   statsScoped().forEach(t => {
     if (cat && t.category !== cat) return;
     if (words.length) { const n = t.name.toLowerCase(); if (!words.every(w => n.includes(w))) return; }
+    if (t.transfer) return;
     const key = itemKey(t);
     if (!by[key]) by[key] = {
       name: t.name, category: t.category, image: t.image, gender: t.gender || null,
@@ -2922,7 +2926,7 @@ function buildDays() {
   const from = $('d-from').value, to = $('d-to').value;
   const by = {};
   statsScoped().forEach(t => {
-    if (t.action === 'Купил') return;
+    if (t.action === 'Купил' || t.transfer) return;
     const key = dayKey(t.date);
     if (from && key < from) return;
     if (to && key > to) return;
@@ -3764,6 +3768,176 @@ $('cat-import-file').addEventListener('change', async () => {
   renderProducts();
 });
 
+/* ---------- moving between stock and assets ---------- */
+function openMoveToAsset(lotId) {
+  const inv = inventory().find(x => x.lot.id === lotId);
+  if (!inv) return;
+  const { lot, remaining } = inv;
+  const unit = unitCost(lot);
+
+  const f = openModal('Перенести в имущество', `
+    <div class="hint" style="margin-bottom:10px;">
+      «${escapeHtml(lot.name)}» · на складе ${remaining} шт. по ${money(unit)}/шт.
+      Позиция уйдёт со склада и перестанет считаться товаром на продажу.
+    </div>
+    <div class="row">
+      <div>
+        <label>Количество (макс. ${remaining})</label>
+        <input type="number" class="mv-qty" min="1" max="${remaining}" step="1" value="${remaining}">
+      </div>
+      <div>
+        <label>Реальная оценка за шт.</label>
+        <input type="text" class="mv-value" inputmode="numeric" autocomplete="off">
+      </div>
+    </div>
+    <div class="hint" style="margin-top:6px;">Потрачено подставится из закупки — ${money(unit)}/шт.</div>
+    <div class="error mv-err"></div>
+    <div class="btn-row" style="margin-top:10px;">
+      <button type="button" class="mv-save">Перенести</button>
+      <button type="button" class="secondary mv-cancel">Отмена</button>
+    </div>`);
+
+  const valueEl = f.querySelector('.mv-value');
+  attachMoneyInput(valueEl);
+  setMoney(valueEl, Math.round(unit));
+  f.querySelector('.mv-cancel').addEventListener('click', closeModal);
+
+  f.querySelector('.mv-save').addEventListener('click', async () => {
+    const err = f.querySelector('.mv-err');
+    const qty = parseInt(f.querySelector('.mv-qty').value) || 0;
+    const value = moneyVal(valueEl);
+    if (!(qty >= 1) || qty > remaining) { err.textContent = `Количество от 1 до ${remaining}`; err.style.display = 'block'; return; }
+    if (!(value > 0)) { err.textContent = 'Укажите реальную оценку'; err.style.display = 'block'; return; }
+    err.style.display = 'none';
+
+    /* write off the moved units from stock as an internal transfer */
+    transactions.push({
+      id: Date.now(),
+      profileId: profileOf(lot),
+      category: lot.category,
+      name: lot.name,
+      gender: lot.gender || null,
+      action: 'Продал',
+      price: unit, qty,
+      total: unit * qty,
+      perUnit: lot.perUnit || qty > 1,
+      date: nowLocalISO(),
+      comment: 'Перенос в имущество',
+      cash: false,
+      lotId: lot.id,
+      costBasis: unit * qty,
+      transfer: true
+    });
+
+    assets.push({
+      id: Date.now() + 1,
+      category: lot.category,
+      name: lot.name,
+      price: Math.round(unit), qty,
+      total: Math.round(unit) * qty,
+      value, valueTotal: value * qty,
+      image: null,
+      imgId: null,
+      comment: 'Перенесено со склада',
+      upgrades: []
+    });
+
+    await saveTx();
+    await saveAssets();
+    closeModal();
+    renderAll();
+    renderAssets();
+    showBanner('Перенесено в имущество.', true);
+  });
+}
+
+function openMoveToStock(assetId) {
+  const a = assets.find(x => x.id === assetId);
+  if (!a) return;
+  const unit = Math.round(assetSpent(a) / (a.qty || 1));
+
+  const f = openModal('Перенести на склад', `
+    <div class="hint" style="margin-bottom:10px;">
+      «${escapeHtml(a.name)}» · ${a.qty} шт. по ${money(unit)}/шт. с учётом доп. расходов.
+      Позиция появится на складе выбранного профиля как покупка и станет товаром на продажу.
+    </div>
+    <div class="row">
+      <div>
+        <label>Профиль</label>
+        <select class="mv-profile">
+          ${PROFILES.map(n => `<option value="${n}"${(!isAllProfiles() && n === activeProfile) ? ' selected' : ''}>${escapeHtml(profileLabel(n))}</option>`).join('')}
+        </select>
+      </div>
+      <div>
+        <label>Количество (макс. ${a.qty})</label>
+        <input type="number" class="mv-qty" min="1" max="${a.qty}" step="1" value="${a.qty}">
+      </div>
+    </div>
+    <div class="row full">
+      <div>
+        <label>Закупочная цена за шт.</label>
+        <input type="text" class="mv-price" inputmode="numeric" autocomplete="off">
+      </div>
+    </div>
+    <div class="error mv-err"></div>
+    <div class="btn-row" style="margin-top:10px;">
+      <button type="button" class="mv-save">Перенести</button>
+      <button type="button" class="secondary mv-cancel">Отмена</button>
+    </div>`);
+
+  const priceEl = f.querySelector('.mv-price');
+  attachMoneyInput(priceEl);
+  setMoney(priceEl, unit);
+  f.querySelector('.mv-cancel').addEventListener('click', closeModal);
+
+  f.querySelector('.mv-save').addEventListener('click', async () => {
+    const err = f.querySelector('.mv-err');
+    const qty = parseInt(f.querySelector('.mv-qty').value) || 0;
+    const price = moneyVal(priceEl);
+    const profile = Number(f.querySelector('.mv-profile').value);
+    if (!(qty >= 1) || qty > a.qty) { err.textContent = `Количество от 1 до ${a.qty}`; err.style.display = 'block'; return; }
+    if (!(price > 0)) { err.textContent = 'Укажите закупочную цену'; err.style.display = 'block'; return; }
+    err.style.display = 'none';
+
+    transactions.push({
+      id: Date.now(),
+      profileId: profile,
+      category: a.category,
+      name: a.name,
+      gender: null,
+      action: 'Купил',
+      price, qty,
+      total: price * qty,
+      perUnit: qty > 1 || a.category === 'Предмет',
+      date: nowLocalISO(),
+      comment: 'Перенос из имущества',
+      cash: false,
+      extras: []
+    });
+
+    if (qty >= a.qty) {
+      assets = assets.filter(x => x.id !== assetId);
+      if (!assets.length) allowEmpty(ASSET_KEY);
+    } else {
+      a.qty -= qty;
+      a.total = a.price * a.qty;
+      a.valueTotal = a.value * a.qty;
+    }
+
+    await saveTx();
+    await saveAssets();
+    closeModal();
+    if (!isAllProfiles() && activeProfile !== profile) {
+      activeProfile = profile;
+      mirrorWrite(PROFILE_KEY, String(activeProfile));
+      await writeKey(PROFILE_KEY, String(activeProfile));
+    }
+    renderAll();
+    renderAssets();
+    showBanner('Перенесено на склад: ' + profileLabel(profile) + '.', true);
+  });
+}
+
 /* ---------- catalog picker for the assets form ---------- */
 function openQuickCreateFor(name, category, onCreated) {
   const cw = hasColorways(category);
@@ -4203,6 +4377,7 @@ function renderAssets() {
           <div class="deal-foot">
             <div class="quick-btns">
               <button class="quick-btn a-upg" data-id="${a.id}" style="background:var(--panel-2); color:var(--gold);">+ Доп. расход</button>
+              <button class="quick-btn a-tostock" data-id="${a.id}" style="background:var(--panel-2);">На склад</button>
               <button class="quick-btn a-edit" data-id="${a.id}" style="background:var(--panel-2);">Изменить</button>
               <button class="quick-btn a-del" data-id="${a.id}" style="background:var(--panel-2); color:var(--red);">Удалить</button>
             </div>
@@ -4216,6 +4391,8 @@ function renderAssets() {
   list.querySelectorAll('.a-del').forEach(b => b.addEventListener('click', () => deleteAsset(Number(b.dataset.id))));
   list.querySelectorAll('.a-upg').forEach(b => b.addEventListener('click', () =>
     openUpgradeForm(Number(b.dataset.id))));
+  list.querySelectorAll('.a-tostock').forEach(b => b.addEventListener('click', () =>
+    openMoveToStock(Number(b.dataset.id))));
   list.querySelectorAll('.u-del').forEach(b => b.addEventListener('click', () =>
     deleteUpgrade(Number(b.dataset.asset), Number(b.dataset.upg))));
 }
