@@ -588,6 +588,12 @@
         <input type="text" id="h-search" placeholder="Например: Adibas" autocomplete="off">
       </div>
     </div>
+    <div class="row full">
+      <div>
+        <label>Профиль</label>
+        <select id="h-profile"></select>
+      </div>
+    </div>
     <div class="row">
       <div>
         <label>Категория</label>
@@ -922,7 +928,7 @@
 </div>
 
 <script>
-const APP_VERSION = '2.5';
+const APP_VERSION = '2.6';
 const APP_BUILD_DATE = '04.09.26';
 const TX_KEY = 'flip-transactions-v3';
 const OLD_TX_KEY = 'flip-transactions-v2';
@@ -1607,11 +1613,14 @@ function scoped() {
   return isAllProfiles() ? transactions : transactions.filter(t => profileOf(t) === activeProfile);
 }
 function refreshProfileSelects() {
-  const sel = $('stats-profile');
-  const cur = sel.value || 'all';
-  sel.innerHTML = '<option value="all">Все профили</option>' +
-    PROFILES.map(n => `<option value="${n}">${escapeHtml(profileLabel(n))}</option>`).join('');
-  sel.value = cur;
+  [['stats-profile', 'all'], ['h-profile', 'all']].forEach(([id, def]) => {
+    const sel = $(id);
+    if (!sel) return;
+    const cur = sel.value || def;
+    sel.innerHTML = '<option value="all">Все профили</option>' +
+      PROFILES.map(n => `<option value="${n}">${escapeHtml(profileLabel(n))}</option>`).join('');
+    sel.value = cur;
+  });
 }
 function echoesCategory(label, cat) {
   const a = String(label).toLowerCase().trim();
@@ -2603,6 +2612,7 @@ function openSellForm(cardEl, lotId) {
 const HISTORY_PAGE = 50;
 const historyLimits = {};
 function renderHistory(listId, emptyId, rows) {
+  const showProfile = listId === 'history-list-full' ? historyIsAll() : isAllProfiles();
   const list = $(listId), empty = $(emptyId);
   list.innerHTML = '';
   const all = [...rows].sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
@@ -2622,7 +2632,7 @@ function renderHistory(listId, emptyId, rows) {
     const net = t.action === 'Продал' ? t.total - costBasisOf(t) : null;
     const ex = isBuy ? extrasSum(t) : 0;
     const chips = [
-      isAllProfiles() && !echoesCategory(profileLabel(profileOf(t)), t.category)
+      showProfile && !echoesCategory(profileLabel(profileOf(t)), t.category)
         ? `<span class="chip profile">${escapeHtml(profileLabel(profileOf(t)))}</span>` : '',
       catChip(t.category),
       genderChip(t.gender),
@@ -2778,11 +2788,17 @@ function renderStatCards() {
 /* ---------- history filters ---------- */
 const hCategory = $('h-category');
 hCategory.innerHTML = '<option value="">Все категории</option>' + [...CATEGORIES, OTHER].map(c => `<option value="${c}">${c}</option>`).join('');
+function historyScoped() {
+  const v = $('h-profile').value;
+  return v === 'all' ? transactions : transactions.filter(t => profileOf(t) === Number(v));
+}
+function historyIsAll() { return $('h-profile').value === 'all'; }
+
 function filteredTransactions() {
   const q = $('h-search').value.trim().toLowerCase();
   const cat = hCategory.value, act = $('h-action').value;
   const words = q ? q.split(/\s+/).filter(Boolean) : [];
-  return scoped().filter(t => {
+  return historyScoped().filter(t => {
     if (cat && t.category !== cat) return false;
     if (act && t.action !== act) return false;
     if (words.length) { const n = t.name.toLowerCase(); if (!words.every(w => n.includes(w))) return false; }
@@ -2798,9 +2814,9 @@ function renderFilteredHistory() {
   renderHistory('history-list-full', 'history-empty-full', rows);
 }
 $('h-search').addEventListener('input', renderFilteredHistory);
-['h-category','h-action'].forEach(id => $(id).addEventListener('change', renderFilteredHistory));
+['h-category','h-action','h-profile'].forEach(id => $(id).addEventListener('change', renderFilteredHistory));
 $('h-reset').addEventListener('click', () => {
-  $('h-search').value = ''; hCategory.value = ''; $('h-action').value = '';
+  $('h-search').value = ''; hCategory.value = ''; $('h-action').value = ''; $('h-profile').value = 'all';
   renderFilteredHistory();
 });
 
