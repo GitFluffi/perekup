@@ -922,7 +922,7 @@
 </div>
 
 <script>
-const APP_VERSION = '2.3';
+const APP_VERSION = '2.4';
 const APP_BUILD_DATE = '04.09.26';
 const TX_KEY = 'flip-transactions-v3';
 const OLD_TX_KEY = 'flip-transactions-v2';
@@ -1560,6 +1560,8 @@ async function deleteImage(id) {
 }
 /* a record can carry either a legacy inline dataUrl (image) or an id (imgId) */
 const imgOf = o => o ? (getImage(o.imgId) || o.image || null) : null;
+/* assets and stock rows can borrow the catalog photo by name */
+const imgOfNamed = o => o ? (imgOf(o) || findImageByName(o.category, o.name, o.gender)) : null;
 
 /* preload every referenced image once, so renders stay synchronous */
 async function preloadImages() {
@@ -3829,6 +3831,9 @@ function openMoveToAsset(lotId) {
       transfer: true
     });
 
+    const src = imageFor(lot);
+    const movedImgId = src ? await putImage(src) : null;
+
     assets.push({
       id: Date.now() + 1,
       category: lot.category,
@@ -3837,7 +3842,7 @@ function openMoveToAsset(lotId) {
       total: Math.round(unit) * qty,
       value, valueTotal: value * qty,
       image: null,
-      imgId: null,
+      imgId: movedImgId,
       comment: 'Перенесено со склада',
       upgrades: []
     });
@@ -4348,7 +4353,7 @@ function renderAssets() {
       el.className = 'asset-card';
       el.style.borderLeftColor = catColor(a.category);
       el.innerHTML = `
-        ${imgOf(a) ? `<img class="asset-img" loading="lazy" decoding="async" src="${imgOf(a)}">` : `<div class="asset-img empty">нет фото</div>`}
+        ${imgOfNamed(a) ? `<img class="asset-img" loading="lazy" decoding="async" src="${imgOfNamed(a)}">` : `<div class="asset-img empty">нет фото</div>`}
         <div class="asset-body">
           <div class="asset-head">
             <div style="min-width:0;">
@@ -4471,7 +4476,7 @@ function startAssetEdit(id) {
   setMoney($('a-value'), a.value !== undefined ? a.value : a.price);
   $('a-qty').value = a.qty;
   $('a-comment').value = a.comment || '';
-  aPendingImage = imgOf(a);
+  aPendingImage = imgOfNamed(a);
   if (aPendingImage) { $('a-thumb').src = aPendingImage; $('a-thumb').style.display = 'block'; }
   else $('a-thumb').style.display = 'none';
   $('a-submit').textContent = 'Сохранить изменения';
