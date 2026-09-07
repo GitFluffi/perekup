@@ -922,7 +922,7 @@
 </div>
 
 <script>
-const APP_VERSION = '2.4';
+const APP_VERSION = '2.5';
 const APP_BUILD_DATE = '04.09.26';
 const TX_KEY = 'flip-transactions-v3';
 const OLD_TX_KEY = 'flip-transactions-v2';
@@ -2628,10 +2628,14 @@ function renderHistory(listId, emptyId, rows) {
       genderChip(t.gender),
       t.transfer ? `<span class="chip" style="color:var(--gold)">перенос</span>` : actionChip(t.action),
       t.qty > 1 ? `<span class="chip">x${t.qty}</span>` : '',
-      `<span class="chip" style="color:${actionColor(t.action)}">${isBuy ? '' : pos ? '+ ' : '− '}${money(t.total)}</span>`,
+      t.transfer
+        ? `<span class="chip" style="color:var(--gold)">${money(t.total)}</span>`
+        : `<span class="chip" style="color:${actionColor(t.action)}">${isBuy ? '' : pos ? '+ ' : '− '}${money(t.total)}</span>`,
       ex ? `<span class="chip red">доп. ${money(ex)}</span>` : '',
       (net !== null && !t.transfer) ? `<span class="chip ${net >= 0 ? 'green' : 'red'}">чистыми ${net >= 0 ? '+' : '−'} ${money(net)}</span>` : '',
-      t.qty > 1 ? `<span class="chip muted">за шт: ${money(t.price)}</span>` : '',
+      t.qty > 1
+        ? `<span class="chip muted"${t.transfer ? ' style="color:var(--gold)"' : ''}>за шт: ${money(t.price)}</span>`
+        : '',
       t.cash ? `<span class="chip muted">наличка</span>` : ''
     ].filter(Boolean).join('');
 
