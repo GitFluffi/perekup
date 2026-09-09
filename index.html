@@ -463,12 +463,12 @@
       <div class="sub" id="stat-today-sub"></div>
     </div>
     <div class="card">
-      <div class="label">чистыми за неделю</div>
+      <div class="label">чистыми с понедельника</div>
       <div class="value" id="stat-week">—</div>
       <div class="sub" id="stat-week-sub"></div>
     </div>
     <div class="card">
-      <div class="label">чистыми за месяц</div>
+      <div class="label">чистыми с 1 числа</div>
       <div class="value" id="stat-month">—</div>
       <div class="sub" id="stat-month-sub"></div>
     </div>
@@ -928,7 +928,7 @@
 </div>
 
 <script>
-const APP_VERSION = '2.6';
+const APP_VERSION = '2.7';
 const APP_BUILD_DATE = '04.09.26';
 const TX_KEY = 'flip-transactions-v3';
 const OLD_TX_KEY = 'flip-transactions-v2';
@@ -1713,10 +1713,18 @@ async function stripTxImages() {
   buildImageIndex();
   let txChanged = false;
   /* older records were saved before the item had a gender — adopt it when unambiguous */
+  /* older records were saved before the item had a gender — adopt it when the catalog is unambiguous */
   for (const t of transactions) {
     if (t.gender || t.category === OTHER) continue;
-    const hit = resolveEntry(t.category, t.name);
-    if (hit && hit.gender) { t.gender = hit.gender; txChanged = true; }
+    const n = String(t.name).trim().toLowerCase();
+    const genders = new Set(
+      entriesInCategory(t.category)
+        .filter(e => e.name.trim().toLowerCase() === n)
+        .map(e => e.gender || null));
+    if (genders.size === 1) {
+      const g = [...genders][0];
+      if (g) { t.gender = g; txChanged = true; }
+    }
   }
   for (const t of transactions) {
     if (!t.image) continue;
@@ -2762,16 +2770,24 @@ function repeatDeal(id, action) {
 }
 
 /* ---------- stat cards ---------- */
-function inRange(dateStr, daysBack) {
-  const d = new Date(dateStr);
+/* calendar periods: today, this week (from Monday), this month (from the 1st) */
+function periodStart(period) {
   const start = new Date();
   start.setHours(0, 0, 0, 0);
-  start.setDate(start.getDate() - (daysBack - 1));
-  return d >= start;
+  if (period === 'week') {
+    const wd = (start.getDay() + 6) % 7;   // Monday = 0
+    start.setDate(start.getDate() - wd);
+  } else if (period === 'month') {
+    start.setDate(1);
+  }
+  return start;
+}
+function inRange(dateStr, period) {
+  return new Date(dateStr) >= periodStart(period);
 }
 function renderStatCards() {
-  [['today',1],['week',7],['month',30]].forEach(([key, days]) => {
-    const rows = scoped().filter(t => inRange(t.date, days) && t.action !== 'Купил' && !t.transfer);
+  [['today','today'],['week','week'],['month','month']].forEach(([key, period]) => {
+    const rows = scoped().filter(t => inRange(t.date, period) && t.action !== 'Купил' && !t.transfer);
     const net = rows.reduce((s, t) => s + realizedOf(t), 0);
     const el = $('stat-' + key);
     el.textContent = (net >= 0 ? '+ ' : '− ') + money(net);
@@ -2869,6 +2885,21 @@ function renderItemStats() {
   if (!items.length) { empty.style.display = 'block'; return; }
   empty.style.display = 'none';
 
+  /* flag legacy rows that split off because they carry no gender */
+  const byName = {};
+  items.forEach(g => {
+    const k = g.category + '|' + g.name.trim().toLowerCase();
+    (byName[k] = byName[k] || []).push(g);
+  });
+  Object.values(byName).forEach(group => {
+    if (group.length < 2) return;
+    const genderless = group.filter(x => !x.gender);
+    const gendered = group.filter(x => x.gender);
+    if (genderless.length && gendered.length === 1) {
+      genderless.forEach(x => { x.mergeInto = gendered[0].gender; });
+    }
+  });
+
   items.forEach(g => {
     const avgBuy = g.boughtQty ? g.buySum / g.boughtQty : null;
     const avgSell = g.soldQty ? g.sellSum / g.soldQty : null;
@@ -2890,6 +2921,12 @@ function renderItemStats() {
         </div>
         <div class="si-net ${g.realized >= 0 ? 'profit-pos' : 'profit-neg'}">${g.realized >= 0 ? '+' : '−'} ${money(g.realized)}</div>
       </div>
+      ${g.mergeInto ? `<div class="hint" style="margin-top:6px;">
+        Эти сделки записаны без пола и потому идут отдельной строкой.
+        <button type="button" class="cw-more merge-btn" data-name="${escapeHtml(g.name)}" data-cat="${escapeHtml(g.category)}" data-gender="${g.mergeInto}" style="margin-top:6px;">
+          Объединить с «${escapeHtml(g.name)} ${GENDER_SYMBOL[g.mergeInto]}»
+        </button>
+      </div>` : ''}
       <div class="si-block">
         <div class="si-block-title">Покупка</div>
         <div class="si-grid">
@@ -2920,6 +2957,20 @@ function renderItemStats() {
       </div>` : ''}`;
     list.appendChild(el);
   });
+
+  list.querySelectorAll('.merge-btn').forEach(b => b.addEventListener('click', async () => {
+    const { name, cat, gender } = b.dataset;
+    const n = name.trim().toLowerCase();
+    let count = 0;
+    transactions.forEach(t => {
+      if (!t.gender && t.category === cat && t.name.trim().toLowerCase() === n) { t.gender = gender; count++; }
+    });
+    if (!count) return;
+    await saveTx();
+    renderAll();
+    renderItemStats();
+    showBanner(`Объединено сделок: ${count}.`, true);
+  }));
 }
 $('s-search').addEventListener('input', renderItemStats);
 sCategory.addEventListener('change', renderItemStats);
