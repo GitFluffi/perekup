@@ -223,6 +223,12 @@
   .si-row { display: flex; justify-content: space-between; font-size: 12.5px; gap: 8px; }
   .si-row span:first-child { color: var(--muted); }
   .si-row span:last-child { font-family: var(--mono); }
+  .grp-body { margin-top: 4px; }
+  .stat-sub {
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 7px;
+    padding: 10px 12px; margin-top: 8px;
+  }
+  .stat-sub .si-name { font-size: 13px; }
   .si-img { width: 42px; height: 42px; border-radius: 6px; object-fit: cover; background: var(--line); flex-shrink: 0; }
 
   .cat-select-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
@@ -928,7 +934,7 @@
 </div>
 
 <script>
-const APP_VERSION = '2.7';
+const APP_VERSION = '2.8';
 const APP_BUILD_DATE = '04.09.26';
 const TX_KEY = 'flip-transactions-v3';
 const OLD_TX_KEY = 'flip-transactions-v2';
@@ -1601,6 +1607,7 @@ async function extractAssetImages() {
 
 async function saveProducts(fromCloud) {
   imageIndex = null;
+  ownerIndex = null;
   const r = await safeSet(PROD_KEY, products, 'каталог товаров');
   if (!fromCloud) markCloudDirty(PROD_KEY);
   return r;
@@ -2856,6 +2863,7 @@ function buildItemStats() {
       buyPrices: [], sellPrices: [], realized: 0, deals: 0, extras: 0, profiles: new Set()
     };
     const g = by[key];
+    if (g.owner === undefined) g.owner = ownerOf(t);
     g.profiles.add(profileOf(t));
     if (!g.image) g.image = imageFor(t);
     g.deals++;
@@ -2875,7 +2883,93 @@ function buildItemStats() {
     g.remaining = mine.reduce((s, x) => s + x.remaining, 0);
     g.investedNow = mine.reduce((s, x) => s + x.remaining * unitCost(x.lot), 0);
   });
-  return Object.values(by).sort((a, b) => b.realized - a.realized);
+  /* fold colourways of the same catalog card into one collapsible group */
+  const rows = Object.values(by);
+  const groups = new Map();
+  const singles = [];
+  rows.forEach(r => {
+    if (!r.owner) { singles.push(r); return; }
+    const k = r.owner.id;
+    if (!groups.has(k)) {
+      groups.set(k, {
+        isGroup: true, id: k, name: r.owner.name, category: r.owner.category,
+        gender: r.owner.gender, image: null, items: [],
+        realized: 0, deals: 0, boughtQty: 0, soldQty: 0, remaining: 0, investedNow: 0
+      });
+    }
+    const G = groups.get(k);
+    G.items.push(r);
+    G.realized += r.realized;
+    G.deals += r.deals;
+    G.boughtQty += r.boughtQty;
+    G.soldQty += r.soldQty;
+    G.remaining += r.remaining;
+    G.investedNow += r.investedNow;
+    if (!G.image) G.image = r.image;
+  });
+
+  const out = [...singles];
+  groups.forEach(G => {
+    if (G.items.length === 1) out.push(G.items[0]);
+    else { G.items.sort((a, b) => b.realized - a.realized); out.push(G); }
+  });
+  return out.sort((a, b) => b.realized - a.realized);
+}
+
+const expandedStatGroups = new Set();
+
+function statItemHtml(g, compact) {
+  const avgBuy = g.boughtQty ? g.buySum / g.boughtQty : null;
+  const avgSell = g.soldQty ? g.sellSum / g.soldQty : null;
+  const minBuy = g.buyPrices.length ? Math.min(...g.buyPrices) : null;
+  const maxBuy = g.buyPrices.length ? Math.max(...g.buyPrices) : null;
+  const minSell = g.sellPrices.length ? Math.min(...g.sellPrices) : null;
+  const maxSell = g.sellPrices.length ? Math.max(...g.sellPrices) : null;
+  const v = n => n === null ? '—' : money(n);
+
+  return `
+    <div class="stat-item-head">
+      ${!compact && g.image ? `<img class="si-img" loading="lazy" src="${g.image}">` : ''}
+      <div style="flex:1; min-width:0;">
+        <div class="si-name">${escapeHtml(g.name)}${genderBadge(g.gender)}</div>
+        <div class="si-cat">${statsIsAll() && g.profiles && g.profiles.size > 0 ? escapeHtml([...g.profiles].sort().map(profileLabel).join(', ')) + ' · ' : ''}<span style="color:${catColor(g.category)}">${escapeHtml(g.category)}</span> · ${g.deals} сделок${g.remaining ? ' · на складе ' + g.remaining + ' шт.' : ''}</div>
+      </div>
+      <div class="si-net ${g.realized >= 0 ? 'profit-pos' : 'profit-neg'}">${g.realized >= 0 ? '+' : '−'} ${money(g.realized)}</div>
+    </div>
+    ${g.mergeInto ? `<div class="hint" style="margin-top:6px;">
+      Эти сделки записаны без пола и потому идут отдельной строкой.
+      <button type="button" class="cw-more merge-btn" data-name="${escapeHtml(g.name)}" data-cat="${escapeHtml(g.category)}" data-gender="${g.mergeInto}" style="margin-top:6px;">
+        Объединить с «${escapeHtml(g.name)} ${GENDER_SYMBOL[g.mergeInto]}»
+      </button>
+    </div>` : ''}
+    <div class="si-block">
+      <div class="si-block-title">Покупка</div>
+      <div class="si-grid">
+        <div class="si-row"><span>Куплено</span><span>${g.boughtQty || '—'}</span></div>
+        <div class="si-row"><span>Средняя</span><span>${v(avgBuy)}</span></div>
+        <div class="si-row"><span>Минимальная</span><span>${v(minBuy)}</span></div>
+        <div class="si-row"><span>Максимальная</span><span>${v(maxBuy)}</span></div>
+      </div>
+      ${g.extras ? `<div class="si-grid" style="margin-top:6px;">
+        <div class="si-row"><span>Доп. расходы</span><span>${money(g.extras)}</span></div>
+      </div>` : ''}
+    </div>
+    <div class="si-block">
+      <div class="si-block-title">Продажа</div>
+      <div class="si-grid">
+        <div class="si-row"><span>Продано</span><span>${g.soldQty || '—'}</span></div>
+        <div class="si-row"><span>Средняя</span><span>${v(avgSell)}</span></div>
+        <div class="si-row"><span>Минимальная</span><span>${v(minSell)}</span></div>
+        <div class="si-row"><span>Максимальная</span><span>${v(maxSell)}</span></div>
+      </div>
+    </div>
+    ${g.remaining ? `<div class="si-block">
+      <div class="si-block-title">Сейчас на складе</div>
+      <div class="si-grid">
+        <div class="si-row"><span>Остаток</span><span>${g.remaining} шт.</span></div>
+        <div class="si-row"><span>Вложено</span><span>${money(g.investedNow)}</span></div>
+      </div>
+    </div>` : ''}`;
 }
 
 function renderItemStats() {
@@ -2885,9 +2979,9 @@ function renderItemStats() {
   if (!items.length) { empty.style.display = 'block'; return; }
   empty.style.display = 'none';
 
-  /* flag legacy rows that split off because they carry no gender */
+  /* legacy rows without gender that can be merged into a gendered twin */
   const byName = {};
-  items.forEach(g => {
+  items.filter(x => !x.isGroup).forEach(g => {
     const k = g.category + '|' + g.name.trim().toLowerCase();
     (byName[k] = byName[k] || []).push(g);
   });
@@ -2901,60 +2995,52 @@ function renderItemStats() {
   });
 
   items.forEach(g => {
-    const avgBuy = g.boughtQty ? g.buySum / g.boughtQty : null;
-    const avgSell = g.soldQty ? g.sellSum / g.soldQty : null;
-    const minBuy = g.buyPrices.length ? Math.min(...g.buyPrices) : null;
-    const maxBuy = g.buyPrices.length ? Math.max(...g.buyPrices) : null;
-    const minSell = g.sellPrices.length ? Math.min(...g.sellPrices) : null;
-    const maxSell = g.sellPrices.length ? Math.max(...g.sellPrices) : null;
-    const v = n => n === null ? '—' : money(n);
-
     const el = document.createElement('div');
     el.className = 'stat-item';
     el.style.borderLeftColor = catColor(g.category);
+
+    if (!g.isGroup) {
+      el.innerHTML = statItemHtml(g);
+      list.appendChild(el);
+      return;
+    }
+
+    const open = expandedStatGroups.has(g.id);
+    const n = g.items.length;
     el.innerHTML = `
       <div class="stat-item-head">
-        ${g.image ? `<img class="si-img" src="${g.image}">` : ''}
+        ${g.image ? `<img class="si-img" loading="lazy" src="${g.image}">` : ''}
         <div style="flex:1; min-width:0;">
           <div class="si-name">${escapeHtml(g.name)}${genderBadge(g.gender)}</div>
-          <div class="si-cat">${statsIsAll() && g.profiles && g.profiles.size > 0 ? escapeHtml([...g.profiles].sort().map(profileLabel).join(', ')) + ' · ' : ''}<span style="color:${catColor(g.category)}">${escapeHtml(g.category)}</span> · ${g.deals} сделок${g.remaining ? ' · на складе ' + g.remaining + ' шт.' : ''}</div>
+          <div class="si-cat"><span style="color:${catColor(g.category)}">${escapeHtml(g.category)}</span> · ${n} ${vwCount(g.category, n)} · ${g.deals} сделок${g.remaining ? ' · на складе ' + g.remaining + ' шт.' : ''}</div>
         </div>
         <div class="si-net ${g.realized >= 0 ? 'profit-pos' : 'profit-neg'}">${g.realized >= 0 ? '+' : '−'} ${money(g.realized)}</div>
       </div>
-      ${g.mergeInto ? `<div class="hint" style="margin-top:6px;">
-        Эти сделки записаны без пола и потому идут отдельной строкой.
-        <button type="button" class="cw-more merge-btn" data-name="${escapeHtml(g.name)}" data-cat="${escapeHtml(g.category)}" data-gender="${g.mergeInto}" style="margin-top:6px;">
-          Объединить с «${escapeHtml(g.name)} ${GENDER_SYMBOL[g.mergeInto]}»
-        </button>
-      </div>` : ''}
       <div class="si-block">
-        <div class="si-block-title">Покупка</div>
         <div class="si-grid">
           <div class="si-row"><span>Куплено</span><span>${g.boughtQty || '—'}</span></div>
-          <div class="si-row"><span>Средняя</span><span>${v(avgBuy)}</span></div>
-          <div class="si-row"><span>Минимальная</span><span>${v(minBuy)}</span></div>
-          <div class="si-row"><span>Максимальная</span><span>${v(maxBuy)}</span></div>
-        </div>
-        ${g.extras ? `<div class="si-grid" style="margin-top:6px;">
-          <div class="si-row"><span>Доп. расходы</span><span>${money(g.extras)}</span></div>
-        </div>` : ''}
-      </div>
-      <div class="si-block">
-        <div class="si-block-title">Продажа</div>
-        <div class="si-grid">
           <div class="si-row"><span>Продано</span><span>${g.soldQty || '—'}</span></div>
-          <div class="si-row"><span>Средняя</span><span>${v(avgSell)}</span></div>
-          <div class="si-row"><span>Минимальная</span><span>${v(minSell)}</span></div>
-          <div class="si-row"><span>Максимальная</span><span>${v(maxSell)}</span></div>
+          ${g.remaining ? `<div class="si-row"><span>Остаток</span><span>${g.remaining} шт.</span></div>
+          <div class="si-row"><span>Вложено</span><span>${money(g.investedNow)}</span></div>` : ''}
         </div>
       </div>
-      ${g.remaining ? `<div class="si-block">
-        <div class="si-block-title">Сейчас на складе</div>
-        <div class="si-grid">
-          <div class="si-row"><span>Остаток</span><span>${g.remaining} шт.</span></div>
-          <div class="si-row"><span>Вложено</span><span>${money(g.investedNow)}</span></div>
-        </div>
-      </div>` : ''}`;
+      <button type="button" class="cw-more grp-toggle">${open ? 'Свернуть' : `Показать по ${vwCount(g.category, n === 1 ? 1 : 2)} (${n})`}</button>
+      <div class="grp-body ${open ? '' : 'hidden'}"></div>`;
+
+    const body = el.querySelector('.grp-body');
+    if (open) {
+      g.items.forEach(item => {
+        const sub = document.createElement('div');
+        sub.className = 'stat-sub';
+        sub.innerHTML = statItemHtml(item, true);
+        body.appendChild(sub);
+      });
+    }
+    el.querySelector('.grp-toggle').addEventListener('click', () => {
+      if (open) expandedStatGroups.delete(g.id); else expandedStatGroups.add(g.id);
+      renderItemStats();
+    });
+
     list.appendChild(el);
   });
 
@@ -3140,6 +3226,23 @@ function migrateProducts() {
   });
   products = out;
   if (changed) saveProducts();
+}
+
+/* which catalog card an item name belongs to (for grouping colourways together) */
+let ownerIndex = null;
+function buildOwnerIndex() {
+  ownerIndex = new Map();
+  products.forEach(p => {
+    if (!hasColorways(p.category)) return;
+    (p.colorways || []).forEach(c => {
+      ownerIndex.set(p.category + '|' + c.name.trim().toLowerCase() + '|' + (p.gender || ''),
+                     { id: p.id, name: p.name, category: p.category, gender: p.gender || null });
+    });
+  });
+}
+function ownerOf(t) {
+  if (!ownerIndex) buildOwnerIndex();
+  return ownerIndex.get(t.category + '|' + String(t.name).trim().toLowerCase() + '|' + (t.gender || '')) || null;
 }
 
 /* searchable entries used by the deal form */
