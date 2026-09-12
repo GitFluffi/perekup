@@ -934,7 +934,7 @@
 </div>
 
 <script>
-const APP_VERSION = '2.8';
+const APP_VERSION = '2.9';
 const APP_BUILD_DATE = '04.09.26';
 const TX_KEY = 'flip-transactions-v3';
 const OLD_TX_KEY = 'flip-transactions-v2';
@@ -1201,15 +1201,89 @@ async function cloudPush(key, value) {
   if (!res.ok) throw new Error('HTTP ' + res.status + ' ' + (await res.text()).slice(0, 120));
 }
 
-async function cloudPullAll() {
+const CLOUD_IMG_PREFIX = 'img:';
+let cloudSeen = {};          // key -> updated_at last applied
+try { cloudSeen = JSON.parse(localStorage.getItem('flip-cloud-seen') || '{}'); } catch (e) { cloudSeen = {}; }
+function rememberSeen() {
+  try { localStorage.setItem('flip-cloud-seen', JSON.stringify(cloudSeen)); } catch (e) {}
+}
+
+/* cheap poll: timestamps only, a few hundred bytes */
+async function cloudPullMeta() {
   const res = await fetch(
-    `${CLOUD_URL}/rest/v1/${CLOUD_TABLE}?space=eq.${encodeURIComponent(cloudSpace)}&select=key,value,updated_at`,
+    `${CLOUD_URL}/rest/v1/${CLOUD_TABLE}?space=eq.${encodeURIComponent(cloudSpace)}` +
+    `&key=not.like.${encodeURIComponent(CLOUD_IMG_PREFIX + '*')}&select=key,updated_at`,
+    { headers: cloudReadHeaders() });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const rows = await res.json();
+  const map = {};
+  rows.forEach(r => { map[r.key] = r.updated_at; });
+  return map;
+}
+
+/* fetch the payload only for the keys that actually changed */
+async function cloudPullKeys(keys) {
+  if (!keys.length) return {};
+  const list = keys.map(k => `"${k}"`).join(',');
+  const res = await fetch(
+    `${CLOUD_URL}/rest/v1/${CLOUD_TABLE}?space=eq.${encodeURIComponent(cloudSpace)}` +
+    `&key=in.(${encodeURIComponent(list)})&select=key,value,updated_at`,
     { headers: cloudReadHeaders() });
   if (!res.ok) throw new Error('HTTP ' + res.status);
   const rows = await res.json();
   const map = {};
   rows.forEach(r => { map[r.key] = r; });
   return map;
+}
+
+/* images are fetched once, by id, and then cached forever */
+async function cloudFetchImages(ids) {
+  const missing = ids.filter(id => id && !imageCache.has(id));
+  if (!missing.length) return;
+  for (let i = 0; i < missing.length; i += 25) {
+    const chunk = missing.slice(i, i + 25);
+    const list = chunk.map(id => `"${CLOUD_IMG_PREFIX + id}"`).join(',');
+    const res = await fetch(
+      `${CLOUD_URL}/rest/v1/${CLOUD_TABLE}?space=eq.${encodeURIComponent(cloudSpace)}` +
+      `&key=in.(${encodeURIComponent(list)})&select=key,value`,
+      { headers: cloudReadHeaders() });
+    if (!res.ok) continue;
+    const rows = await res.json();
+    for (const r of rows) {
+      const id = r.key.slice(CLOUD_IMG_PREFIX.length);
+      const data = typeof r.value === 'string' ? r.value : (r.value && r.value.d);
+      if (!data) continue;
+      imageCache.set(id, data);
+      if (checkMirror()) mirrorWrite(IMG_PREFIX + id, data);
+      await writeKey(IMG_PREFIX + id, data);
+    }
+  }
+}
+
+async function cloudPushImages(ids) {
+  const fresh = ids.filter(id => id && !cloudSeen[CLOUD_IMG_PREFIX + id]);
+  if (!fresh.length) return;
+  for (let i = 0; i < fresh.length; i += 10) {
+    const chunk = fresh.slice(i, i + 10);
+    const body = JSON.stringify(chunk.map(id => ({
+      space: cloudSpace, key: CLOUD_IMG_PREFIX + id,
+      value: { d: getImage(id) || '' }, updated_at: new Date().toISOString()
+    })).filter(r => r.value.d));
+    const res = await fetch(`${CLOUD_URL}/rest/v1/${CLOUD_TABLE}`, {
+      method: 'POST', headers: cloudHeaders(), body
+    });
+    if (res.ok) { chunk.forEach(id => { cloudSeen[CLOUD_IMG_PREFIX + id] = '1'; }); rememberSeen(); }
+  }
+}
+
+function usedImageIds() {
+  const ids = new Set();
+  products.forEach(p => {
+    if (p.imgId) ids.add(p.imgId);
+    (p.colorways || []).forEach(c => { if (c.imgId) ids.add(c.imgId); });
+  });
+  assets.forEach(a => { if (a.imgId) ids.add(a.imgId); });
+  return [...ids];
 }
 
 function cloudValueFor(key) {
@@ -1277,13 +1351,15 @@ async function flushCloud() {
   renderCloudStatus();
   try {
     let blocked = 0;
+    if (keys.includes('flip-products') || keys.includes('flip-assets')) {
+      await cloudPushImages(usedImageIds());
+    }
     for (const key of keys) {
-      let value = cloudValueFor(key);
-      if (key === 'flip-products') value = { products, images: collectImages() };
-      if (key === 'flip-assets') value = { assets, images: collectImages() };
+      const value = cloudValueFor(key);
       if (await wouldWipe(key, value)) { blocked++; continue; }
       await cloudPush(key, value);
       intentionalEmpty.delete(key);
+      delete cloudSeen[key];   // refreshed by the next cheap poll
     }
     if (blocked) {
       showBanner(
@@ -1301,17 +1377,29 @@ async function flushCloud() {
   renderCloudStatus();
 }
 
-async function pullFromCloud(silent) {
+async function pullFromCloud(silent, force) {
   if (!cloudOn || !cloudSpace) return;
   cloudState = 'syncing';
   renderCloudStatus();
   try {
-    const map = await cloudPullAll();
+    const meta = await cloudPullMeta();
+    const stale = SYNCED_KEYS.filter(k => meta[k] && (force || cloudSeen[k] !== meta[k]));
+
+    if (!stale.length) {
+      lastPullAt = Date.now();
+      cloudState = 'ok';
+      cloudMsg = 'синхронизировано ' + new Date().toLocaleTimeString('ru-RU').slice(0, 5);
+      renderCloudStatus();
+      return;
+    }
+
+    const map = await cloudPullKeys(stale);
     let changed = false;
-    for (const key of SYNCED_KEYS) {
+    for (const key of stale) {
       const row = map[key];
       if (!row) continue;
       let value = row.value;
+      /* older records kept their photos inline — still accepted */
       if (key === 'flip-products' && value && value.products) {
         await restoreImages(value.images || {});
         value = value.products;
@@ -1322,12 +1410,17 @@ async function pullFromCloud(silent) {
       }
       const local = JSON.stringify(cloudValueFor(key));
       if (JSON.stringify(value) !== local) { cloudApply(key, value); changed = true; }
+      cloudSeen[key] = row.updated_at;
     }
+    rememberSeen();
+
     if (changed) {
       migrateProducts();
+      await cloudFetchImages(usedImageIds());
       await extractImages();
       invalidateTx();
       imageIndex = null;
+      ownerIndex = null;
       await saveTx(true); await saveProducts(true); await saveAssets(true);
       renderAll(); renderProducts(); renderAssets();
       if (!silent) showBanner('Данные обновлены из облака.', true);
@@ -4917,7 +5010,7 @@ $('btn-cloud-pull').addEventListener('click', async () => {
   if (transactions.length || products.length || assets.length) {
     if (!confirm('Заменить данные на этом устройстве тем, что лежит в облаке?')) return;
   }
-  await pullFromCloud();
+  await pullFromCloud(false, true);
 });
 
 /* ---------- backup ---------- */
@@ -5010,9 +5103,9 @@ $('app-version').title = 'Сборка от ' + APP_BUILD_DATE;
     await pullFromCloud(true);
     /* first run on a fresh device: seed the cloud with whatever is here */
     if (!transactions.length && !products.length && !assets.length) renderCloudStatus();
-    setInterval(() => { if (cloudOn && !document.hidden) pullFromCloud(true); }, 60000);
+    setInterval(() => { if (cloudOn && !document.hidden) pullFromCloud(true); }, 5 * 60000);
     document.addEventListener('visibilitychange', () => {
-      if (!document.hidden && cloudOn && Date.now() - lastPullAt > 15000) pullFromCloud(true);
+      if (!document.hidden && cloudOn && Date.now() - lastPullAt > 30000) pullFromCloud(true);
     });
     window.addEventListener('beforeunload', () => { if (cloudPending.size) flushCloud(); });
   }
