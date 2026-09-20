@@ -981,7 +981,7 @@
 </div>
 
 <script>
-const APP_VERSION = '3.1';
+const APP_VERSION = '3.2';
 const APP_BUILD_DATE = '04.09.26';
 const TX_KEY = 'flip-transactions-v3';
 const OLD_TX_KEY = 'flip-transactions-v2';
@@ -2591,7 +2591,7 @@ function siblingsFor(item) {
   if (!owner || !hasColorways(owner.category)) return [];
   return (owner.colorways || [])
     .filter(c => c.name.trim().toLowerCase() !== n)
-    .map(c => ({ id: c.id, name: c.name, image: c.image, category: owner.category, gender: owner.gender || null }));
+    .map(c => ({ id: c.id, name: c.name, image: imgOf(c), category: owner.category, gender: owner.gender || null }));
 }
 
 function openSiblingPicker(lotId) {
