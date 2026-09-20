@@ -319,6 +319,20 @@
   .sect-head:hover { background: var(--panel-2); color: var(--gold); }
   .sect-arrow { color: var(--muted); font-size: 11px; }
   .sect-body { padding: 0 14px 14px; }
+  .preset-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  .preset-chip {
+    width: auto; background: var(--panel-2); border: 1px solid var(--line); color: var(--muted);
+    font-size: 11.5px; font-weight: 400; padding: 5px 10px; border-radius: 999px;
+  }
+  .preset-chip:hover { border-color: var(--gold); color: var(--gold); background: var(--panel-2); }
+  .exp-row {
+    display: flex; align-items: center; gap: 8px; padding: 7px 2px;
+    border-bottom: 1px solid var(--line); font-size: 13px;
+  }
+  .exp-row:last-child { border-bottom: none; }
+  .exp-row span { flex: 1; }
+  .exp-row button { width: auto; background: none; border: none; color: var(--muted); font-size: 14px; padding: 0 4px; }
+  .exp-row button:hover { color: var(--red); background: none; }
   .space-mask {
     cursor: pointer; user-select: none; letter-spacing: 1px;
     border-bottom: 1px dashed var(--line); padding-bottom: 1px;
@@ -770,6 +784,26 @@
   </form>
 
   <form onsubmit="return false;" class="sect">
+    <button type="button" class="sect-head" data-sect="secExp">
+      <span>Виды доп. расходов</span><span class="sect-arrow">▾</span>
+    </button>
+    <div class="sect-body hidden" id="secExp">
+      <div class="hint" style="margin-bottom:10px;">
+        Эти варианты появятся кнопками в окне доп. расходов — на складе и в имуществе. Вписать своё по-прежнему можно.
+      </div>
+      <div id="expense-list"></div>
+      <div class="row" style="margin-top:10px;">
+        <div>
+          <input type="text" id="expense-new" placeholder="Новый вид расхода" autocomplete="off">
+        </div>
+        <div>
+          <button type="button" class="secondary" id="expense-add">Добавить</button>
+        </div>
+      </div>
+    </div>
+  </form>
+
+  <form onsubmit="return false;" class="sect">
     <button type="button" class="sect-head" data-sect="sec3">
       <span>Цвета типов сделок</span><span class="sect-arrow">▾</span>
     </button>
@@ -881,7 +915,7 @@
     </div>
     <div class="row">
       <div>
-        <label>Потрачено за шт.</label>
+        <label>Потрачено за шт. (0 — подарок или находка)</label>
         <input type="text" id="a-price" inputmode="numeric" placeholder="0" autocomplete="off">
       </div>
       <div>
@@ -934,7 +968,7 @@
 </div>
 
 <script>
-const APP_VERSION = '2.9';
+const APP_VERSION = '3.0';
 const APP_BUILD_DATE = '04.09.26';
 const TX_KEY = 'flip-transactions-v3';
 const OLD_TX_KEY = 'flip-transactions-v2';
@@ -1031,6 +1065,9 @@ function applyTheme(key) {
   activeTheme = THEMES[key] ? key : 'forest';
 }
 
+const EXPENSE_KEY = 'flip-expense-presets';
+const DEFAULT_EXPENSES = ['Автопилот', 'Тюнинг', 'Страховка', 'Доставка', 'Ремонт', 'Объява'];
+let expensePresets = [];
 const DEFCAT_KEY = 'flip-profile-categories';
 let profileCategories = {};
 const defaultCatFor = n => profileCategories[n] || 'Предмет';
@@ -1142,6 +1179,10 @@ async function loadAll() {
     profileCategories = v ? JSON.parse(v) : {};
   } catch (e) { profileCategories = {}; }
   try {
+    const v = await readKey(EXPENSE_KEY);
+    expensePresets = v ? JSON.parse(v) : [...DEFAULT_EXPENSES];
+  } catch (e) { expensePresets = [...DEFAULT_EXPENSES]; }
+  try {
     const v = await readKey(THEME_KEY);
     let key = 'forest';
     if (v) { try { key = JSON.parse(v); } catch (e) { key = v; } }
@@ -1167,7 +1208,7 @@ function saveSpace(v) {
 const DEVICE_KEY = 'flip-device-id';
 const SYNCED_KEYS = ['flip-transactions-v3', 'flip-products', 'flip-assets',
                      'flip-profile-names', 'flip-cat-colors', 'flip-action-colors',
-                     'flip-profile-categories'];
+                     'flip-profile-categories', 'flip-expense-presets'];
 
 let cloudOn = true;
 let cloudState = 'idle';     // idle | syncing | ok | error
@@ -1295,6 +1336,7 @@ function cloudValueFor(key) {
     case 'flip-cat-colors': return catColors;
     case 'flip-action-colors': return actionColors;
     case 'flip-profile-categories': return profileCategories;
+    case 'flip-expense-presets': return expensePresets;
     default: return null;
   }
 }
@@ -1307,6 +1349,7 @@ function cloudApply(key, value) {
     case 'flip-cat-colors': catColors = value || {}; break;
     case 'flip-action-colors': actionColors = value || {}; break;
     case 'flip-profile-categories': profileCategories = value || {}; break;
+    case 'flip-expense-presets': expensePresets = value || []; break;
   }
 }
 
@@ -1735,11 +1778,15 @@ function statsScoped() {
 function statsIsAll() { return $('stats-profile').value === 'all'; }
 function renderProfileBar() {
   const bar = $('profile-bar');
+  const dealCount = {};
+  transactions.forEach(t => { const pr = profileOf(t); dealCount[pr] = (dealCount[pr] || 0) + 1; });
+
   bar.innerHTML = PROFILES.map(n => {
-    const used = transactions.some(t => profileOf(t) === n);
+    const cnt = dealCount[n] || 0;
+    const used = cnt > 0;
     const named = !!(profileNames[n] && profileNames[n].trim());
     const label = named ? escapeHtml(profileNames[n].trim()) : n;
-    return `<button type="button" class="profile-btn${activeProfile === n ? ' active' : ''}${named ? ' named' : ''}" data-profile="${n}" title="${escapeHtml(profileLabel(n))}">${label}${used ? '<span class="pb-dot"></span>' : ''}</button>`;
+    return `<button type="button" class="profile-btn${activeProfile === n ? ' active' : ''}${named ? ' named' : ''}" data-profile="${n}" title="${escapeHtml(profileLabel(n) + ' — ' + (cnt ? cnt + ' сделок' : 'пусто'))}">${label}${used ? '<span class="pb-dot"></span>' : ''}</button>`;
   }).join('') +
   `<button type="button" class="profile-btn all${isAllProfiles() ? ' active' : ''}" data-profile="all">Все профили</button>`;
 
@@ -2583,7 +2630,9 @@ function openLotExtraForm(lotId) {
         </div>`).join('')}
     </div>` : ''}
     <label>Что добавили</label>
-    <input type="text" class="le-name" placeholder="Например: Автопилот" style="margin-bottom:8px;">
+    <input type="text" class="le-name" list="le-presets" autocomplete="off" placeholder="Выберите или впишите" style="margin-bottom:6px;">
+    ${expenseDatalist('le-presets')}
+    ${expenseChips('le-chip')}
     <label>Сумма</label>
     <input type="text" class="le-amount" inputmode="numeric" placeholder="0" autocomplete="off">
     <div class="hint" style="margin-top:6px;">Расход увеличит закупочную цену позиции — прибыль с продажи посчитается уже с ним.</div>
@@ -2595,6 +2644,7 @@ function openLotExtraForm(lotId) {
 
   const amountEl = f.querySelector('.le-amount');
   attachMoneyInput(amountEl);
+  wirePresetChips(f, f.querySelector('.le-name'));
   f.querySelector('.le-name').focus();
   f.querySelector('.le-cancel').addEventListener('click', closeModal);
 
@@ -3256,7 +3306,7 @@ function renderAll() {
   else if (v === 'stats') { renderItemStats(); renderDays(); }
   else if (v === 'products') { if (typeof renderProducts === 'function') renderProducts(); }
   else if (v === 'assets') { if (typeof renderAssets === 'function') renderAssets(); }
-  else if (v === 'settings') { initSettingsSections(); if (typeof renderCloudStatus === 'function') renderCloudStatus(); renderThemeSettings(); renderProfileCategorySettings(); renderActionColorSettings(); renderColorSettings(); if (typeof updateStoreInfo === 'function') updateStoreInfo(); }
+  else if (v === 'settings') { initSettingsSections(); if (typeof renderExpenseSettings === 'function') renderExpenseSettings(); if (typeof renderCloudStatus === 'function') renderCloudStatus(); renderThemeSettings(); renderProfileCategorySettings(); renderActionColorSettings(); renderColorSettings(); if (typeof updateStoreInfo === 'function') updateStoreInfo(); }
 }
 
 /* ---------- products tab ---------- */
@@ -4037,6 +4087,22 @@ $('cat-import-file').addEventListener('change', async () => {
   renderProducts();
 });
 
+function expenseDatalist(id) {
+  return `<datalist id="${id}">${expensePresets.map(v => `<option value="${escapeHtml(v)}"></option>`).join('')}</datalist>`;
+}
+function expenseChips(cls) {
+  if (!expensePresets.length) return '';
+  return `<div class="preset-row">${expensePresets.map(v =>
+    `<button type="button" class="preset-chip ${cls}" data-val="${escapeHtml(v)}">${escapeHtml(v)}</button>`).join('')}</div>`;
+}
+function wirePresetChips(scope, input) {
+  scope.querySelectorAll('.preset-chip').forEach(b => b.addEventListener('click', () => {
+    input.value = b.dataset.val;
+    input.dispatchEvent(new Event('input'));
+    input.focus();
+  }));
+}
+
 /* ---------- moving between stock and assets ---------- */
 function openMoveToAsset(lotId) {
   const inv = inventory().find(x => x.lot.id === lotId);
@@ -4462,6 +4528,7 @@ async function saveProfileNames() { markCloudDirty(PROFILE_NAMES_KEY); return sa
 async function saveCatColors() { markCloudDirty(COLORS_KEY); return safeSet(COLORS_KEY, catColors, 'цвета категорий'); }
 async function saveActionColors() { markCloudDirty(ACTCOLORS_KEY); return safeSet(ACTCOLORS_KEY, actionColors, 'цвета типов сделок'); }
 async function saveProfileCategories() { markCloudDirty(DEFCAT_KEY); return safeSet(DEFCAT_KEY, profileCategories, 'категории профилей'); }
+async function saveExpensePresets() { markCloudDirty(EXPENSE_KEY); return safeSet(EXPENSE_KEY, expensePresets, 'виды доп. расходов'); }
 async function saveTheme() {
   if (checkMirror()) mirrorWrite(THEME_KEY, JSON.stringify(activeTheme));
   await writeKey(THEME_KEY, JSON.stringify(activeTheme));
@@ -4479,7 +4546,7 @@ function aTotal() {
 function updateAssetPreview() {
   const { total, valueTotal, qty } = aTotal();
   const el = $('a-preview');
-  if (!(total > 0) && !(valueTotal > 0)) { el.textContent = ''; return; }
+  if (!total && !valueTotal) { el.textContent = ''; return; }
   const diff = valueTotal - total;
   el.innerHTML = `Потрачено ${money(total)} · оценка ${money(valueTotal)}${qty > 1 ? ' (' + qty + ' шт.)' : ''}` +
     (valueTotal > 0 && total > 0 ? ` · разница <b class="${diff >= 0 ? 'pos' : 'neg'}">${diff >= 0 ? '+' : '−'} ${money(diff)}</b>` : '');
@@ -4521,8 +4588,7 @@ $('asset-form').addEventListener('submit', async e => {
   const { price, value, qty, total, valueTotal } = aTotal();
   if (!name) { errEl.textContent = 'Введите название'; errEl.style.display = 'block'; return; }
   if (!(qty >= 1)) { errEl.textContent = 'Количество должно быть не меньше 1'; errEl.style.display = 'block'; return; }
-  if (!(total > 0)) { errEl.textContent = 'Укажите, сколько потрачено'; errEl.style.display = 'block'; return; }
-  if (!(valueTotal > 0)) { errEl.textContent = 'Укажите реальную оценку'; errEl.style.display = 'block'; return; }
+  if (total < 0 || valueTotal < 0) { errEl.textContent = 'Суммы не могут быть отрицательными'; errEl.style.display = 'block'; return; }
   errEl.style.display = 'none';
 
   if (!aPendingImage && aSelected) {
@@ -4679,7 +4745,9 @@ function openUpgradeForm(assetId) {
       ${[...CATEGORIES, OTHER].map(c => `<option value="${c}">${c}</option>`).join('')}
     </select>
     <label>Что добавили</label>
-    <input type="text" class="u-name-input" placeholder="Например: Автопилот" style="margin-bottom:8px;">
+    <input type="text" class="u-name-input" list="u-presets" autocomplete="off" placeholder="Выберите или впишите" style="margin-bottom:6px;">
+    ${expenseDatalist('u-presets')}
+    ${expenseChips('u-chip')}
     <div class="row">
       <div>
         <label>Потрачено</label>
@@ -4701,6 +4769,7 @@ function openUpgradeForm(assetId) {
   const valueEl = f.querySelector('.u-value');
   attachMoneyInput(spentEl);
   attachMoneyInput(valueEl);
+  wirePresetChips(f, f.querySelector('.u-name-input'));
   f.querySelector('.u-name-input').focus();
 
   f.querySelector('.u-cancel').addEventListener('click', closeModal);
@@ -4855,6 +4924,37 @@ $('action-colors-reset').addEventListener('click', async () => {
   renderAll();
 });
 
+/* ---------- settings: expense presets ---------- */
+function renderExpenseSettings() {
+  const box = $('expense-list');
+  if (!box) return;
+  box.innerHTML = expensePresets.length
+    ? expensePresets.map((v, i) => `
+      <div class="exp-row"><span>${escapeHtml(v)}</span>
+        <button type="button" data-i="${i}" aria-label="Удалить">✕</button>
+      </div>`).join('')
+    : '<div class="hint">Список пуст — добавьте первый вид расхода.</div>';
+
+  box.querySelectorAll('button[data-i]').forEach(b => b.addEventListener('click', async () => {
+    expensePresets.splice(Number(b.dataset.i), 1);
+    await saveExpensePresets();
+    renderExpenseSettings();
+  }));
+}
+
+async function addExpensePreset() {
+  const input = $('expense-new');
+  const v = input.value.trim();
+  if (!v) return;
+  if (expensePresets.some(x => x.toLowerCase() === v.toLowerCase())) { input.value = ''; return; }
+  expensePresets.push(v);
+  await saveExpensePresets();
+  input.value = '';
+  renderExpenseSettings();
+}
+$('expense-add').addEventListener('click', addExpensePreset);
+$('expense-new').addEventListener('keydown', e => { if (e.key === 'Enter') addExpensePreset(); });
+
 /* ---------- settings: colors ---------- */
 function initSettingsSections() {
   document.querySelectorAll('.sect-head').forEach(head => {
@@ -4912,7 +5012,7 @@ function buildDump() {
   return {
     version: 5, appVersion: APP_VERSION, exportedAt: new Date().toISOString(),
     transactions, products, assets, images: collectImages(),
-    profileNames, catColors, actionColors, profileCategories, activeTheme, activeProfile
+    profileNames, catColors, actionColors, profileCategories, expensePresets, activeTheme, activeProfile
   };
 }
 
@@ -4934,6 +5034,7 @@ async function applyDump(data) {
   catColors = data.catColors || {};
   actionColors = data.actionColors || {};
   profileCategories = data.profileCategories || {};
+  if (data.expensePresets) expensePresets = data.expensePresets;
   if (data.activeTheme) applyTheme(data.activeTheme);
   await restoreImages(data.images);
   migrateProducts();
@@ -4942,7 +5043,7 @@ async function applyDump(data) {
   invalidateTx();
   imageIndex = null;
   await saveTx(); await saveProducts(); await saveAssets(); await saveProfileNames();
-  await saveCatColors(); await saveProfileCategories(); await saveActionColors(); await saveTheme();
+  await saveCatColors(); await saveProfileCategories(); await saveActionColors(); await saveExpensePresets(); await saveTheme();
   renderAll(); renderProducts(); renderAssets();
 }
 
