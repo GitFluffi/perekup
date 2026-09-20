@@ -319,6 +319,14 @@
   .sect-head:hover { background: var(--panel-2); color: var(--gold); }
   .sect-arrow { color: var(--muted); font-size: 11px; }
   .sect-body { padding: 0 14px 14px; }
+  .inv-search { display: flex; gap: 8px; margin-bottom: 10px; align-items: center; }
+  .inv-search input { flex: 2; }
+  .inv-search select { flex: 1; min-width: 120px; }
+  .inv-clear {
+    width: auto; background: none; border: 1px solid var(--line); color: var(--muted);
+    padding: 8px 11px; font-size: 12px; flex-shrink: 0;
+  }
+  .inv-clear:hover { border-color: var(--red); color: var(--red); background: none; }
   .preset-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
   .preset-chip {
     width: auto; background: var(--panel-2); border: 1px solid var(--line); color: var(--muted);
@@ -593,6 +601,11 @@
   <div class="section-title">
     <span>Склад · активные позиции</span>
     <span id="inventory-count" style="font-size:11px;"></span>
+  </div>
+  <div class="inv-search">
+    <input type="text" id="inv-search" placeholder="Поиск по складу" autocomplete="off">
+    <select id="inv-cat"></select>
+    <button type="button" class="inv-clear hidden" id="inv-clear" aria-label="Сбросить">✕</button>
   </div>
   <div class="listwrap" id="inventory-list"></div>
   <div class="empty" id="inventory-empty" style="display:none;">На складе пусто. Внесите покупку — товар появится здесь и будет ждать продажи.</div>
@@ -968,7 +981,7 @@
 </div>
 
 <script>
-const APP_VERSION = '3.0';
+const APP_VERSION = '3.1';
 const APP_BUILD_DATE = '04.09.26';
 const TX_KEY = 'flip-transactions-v3';
 const OLD_TX_KEY = 'flip-transactions-v2';
@@ -2446,6 +2459,17 @@ function resetForm() {
 $('cancel-edit').addEventListener('click', resetForm);
 
 /* ---------- inventory list ---------- */
+const invCatSel = $('inv-cat');
+invCatSel.innerHTML = '<option value="">Все категории</option>' +
+  [...CATEGORIES, OTHER].map(c => `<option value="${c}">${c}</option>`).join('');
+$('inv-search').addEventListener('input', () => renderInventory());
+invCatSel.addEventListener('change', () => renderInventory());
+$('inv-clear').addEventListener('click', () => {
+  $('inv-search').value = '';
+  invCatSel.value = '';
+  renderInventory();
+});
+
 function withScroll(el, fn) {
   const top = el ? el.scrollTop : 0;
   const pageTop = window.scrollY;
@@ -2458,9 +2482,33 @@ function renderInventory() {
   const list = $('inventory-list');
   const empty = $('inventory-empty');
   list.innerHTML = '';
-  const items = inventory().sort((a, b) => b.lot.date.localeCompare(a.lot.date));
-  $('inventory-count').textContent = items.length ? items.length + ' позиций' : '';
-  if (!items.length) { empty.style.display = 'block'; return; }
+
+  const all = inventory().sort((a, b) => b.lot.date.localeCompare(a.lot.date));
+  const q = ($('inv-search').value || '').trim().toLowerCase();
+  const cat = $('inv-cat').value;
+  const words = q ? q.split(/\s+/).filter(Boolean) : [];
+  const items = all.filter(({ lot }) => {
+    if (cat && lot.category !== cat) return false;
+    if (!words.length) return true;
+    const hay = (lot.name + ' ' + (lot.comment || '') +
+      (lot.gender ? ' ' + GENDER_WORD[lot.gender] + ' ' + GENDER_SYMBOL[lot.gender] : '')).toLowerCase();
+    return words.every(w => hay.includes(w));
+  });
+
+  const filtering = !!(q || cat);
+  $('inv-clear').classList.toggle('hidden', !filtering);
+  const invested = items.reduce((s, x) => s + x.remaining * unitCost(x.lot), 0);
+  $('inventory-count').textContent = all.length
+    ? (filtering ? `${items.length} из ${all.length} · ${money(invested)}` : `${all.length} позиций`)
+    : '';
+
+  if (!items.length) {
+    empty.style.display = 'block';
+    empty.textContent = all.length
+      ? 'Ничего не найдено по этому запросу.'
+      : 'На складе пусто. Внесите покупку — товар появится здесь и будет ждать продажи.';
+    return;
+  }
   empty.style.display = 'none';
 
   const frag = document.createDocumentFragment();
