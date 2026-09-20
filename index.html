@@ -981,7 +981,7 @@
 </div>
 
 <script>
-const APP_VERSION = '3.2';
+const APP_VERSION = '3.3';
 const APP_BUILD_DATE = '04.09.26';
 const TX_KEY = 'flip-transactions-v3';
 const OLD_TX_KEY = 'flip-transactions-v2';
@@ -1211,12 +1211,12 @@ const CLOUD_TABLE = 'app_data';
 const SPACE_KEY = 'flip-space';
 let cloudSpace = '';
 function loadSpace() {
-  try { cloudSpace = localStorage.getItem(SPACE_KEY) || ''; } catch (e) { cloudSpace = ''; }
+  cloudSpace = readSmall(SPACE_KEY) || '';
   return cloudSpace;
 }
 function saveSpace(v) {
   cloudSpace = v;
-  try { localStorage.setItem(SPACE_KEY, v); } catch (e) {}
+  persistSmall(SPACE_KEY, v);
 }
 const DEVICE_KEY = 'flip-device-id';
 const SYNCED_KEYS = ['flip-transactions-v3', 'flip-products', 'flip-assets',
@@ -1562,13 +1562,80 @@ async function readKey(key) {
 
 
 const HostStore = (typeof window !== 'undefined' && window.storage) ? window.storage : null;
+
+function localStorageWorks() {
+  try {
+    localStorage.setItem('__probe', '1');
+    localStorage.removeItem('__probe');
+    return true;
+  } catch (e) { return false; }
+}
+
 const LocalStore = {
   async get(key) { const v = localStorage.getItem(key); if (v === null) throw new Error('not found'); return { key, value: v }; },
   async set(key, value) { localStorage.setItem(key, value); return { key, value }; },
   async delete(key) { localStorage.removeItem(key); return { key, deleted: true }; }
 };
-const Store = HostStore || LocalStore;
-const STORE_MODE = HostStore ? 'host' : 'local';
+
+/* IndexedDB keeps working in browsers that block localStorage */
+const IdbStore = (() => {
+  let dbp = null;
+  function db() {
+    if (dbp) return dbp;
+    dbp = new Promise((res, rej) => {
+      const req = indexedDB.open('flip-store', 1);
+      req.onupgradeneeded = () => req.result.createObjectStore('kv');
+      req.onsuccess = () => res(req.result);
+      req.onerror = () => rej(req.error);
+    });
+    return dbp;
+  }
+  function tx(mode, fn) {
+    return db().then(d => new Promise((res, rej) => {
+      const t = d.transaction('kv', mode);
+      const req = fn(t.objectStore('kv'));
+      t.oncomplete = () => res(req ? req.result : undefined);
+      t.onerror = () => rej(t.error);
+    }));
+  }
+  return {
+    async get(key) {
+      const v = await tx('readonly', st => st.get(key));
+      if (v === undefined) throw new Error('not found');
+      return { key, value: v };
+    },
+    async set(key, value) { await tx('readwrite', st => st.put(value, key)); return { key, value }; },
+    async delete(key) { await tx('readwrite', st => st.delete(key)); return { key, deleted: true }; }
+  };
+})();
+
+const MemStore = (() => {
+  const m = new Map();
+  return {
+    async get(key) { if (!m.has(key)) throw new Error('not found'); return { key, value: m.get(key) }; },
+    async set(key, value) { m.set(key, value); return { key, value }; },
+    async delete(key) { m.delete(key); return { key, deleted: true }; }
+  };
+})();
+
+const hasIdb = (() => { try { return !!window.indexedDB; } catch (e) { return false; } })();
+const lsOk = localStorageWorks();
+
+const Store = HostStore || (lsOk ? LocalStore : (hasIdb ? IdbStore : MemStore));
+const STORE_MODE = HostStore ? 'host' : (lsOk ? 'local' : (hasIdb ? 'idb' : 'memory'));
+
+/* the space key must survive even without localStorage */
+function persistSmall(key, value) {
+  try { localStorage.setItem(key, value); } catch (e) {}
+  try { document.cookie = `${encodeURIComponent(key)}=${encodeURIComponent(value)};path=/;max-age=31536000;SameSite=Lax`; } catch (e) {}
+}
+function readSmall(key) {
+  try { const v = localStorage.getItem(key); if (v) return v; } catch (e) {}
+  try {
+    const m = document.cookie.match(new RegExp('(?:^|; )' + encodeURIComponent(key).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '=([^;]*)'));
+    return m ? decodeURIComponent(m[1]) : null;
+  } catch (e) { return null; }
+}
 
 function showBanner(html, ok) {
   const b = $('storage-banner');
@@ -1661,11 +1728,14 @@ async function safeSet(key, value, label) {
   if (mirrored) {
     /* the browser copy holds the data and it reloads fine — no need to alarm */
     return false;
+  } else if (cloudOn && cloudSpace) {
+    /* the cloud holds the data, so this is only about the offline copy */
+    return false;
   } else {
     showBanner(
-      `<b>Данные не сохраняются.</b> Ни основное хранилище, ни память браузера не отвечают — ` +
-      `после закрытия вкладки «${label}» пропадут.` +
-      `<br>Скачайте резервную копию в «Настройках» и откройте программу из файла на компьютере.` +
+      `<b>Данные сохраняются только в облаке.</b> Память этого браузера недоступна, ` +
+      `поэтому «${label}» восстановятся при следующем открытии из облака.` +
+      `<br>Если синхронизация выключена, включите её в «Настройках» или скачайте резервную копию.` +
       `<div><button type="button" id="retry-save">Повторить сейчас</button></div>`
     );
   }
@@ -5137,7 +5207,7 @@ $('btn-space').addEventListener('click', () => openSpaceDialog(false));
 
 $('cloud-toggle').addEventListener('change', async () => {
   cloudOn = $('cloud-toggle').checked;
-  try { localStorage.setItem('flip-cloud-on', cloudOn ? '1' : '0'); } catch (e) {}
+  persistSmall('flip-cloud-on', cloudOn ? '1' : '0');
   renderCloudStatus();
   if (cloudOn && !cloudSpace) { openSpaceDialog(true); return; }
   if (cloudOn) await pullFromCloud();
@@ -5227,7 +5297,8 @@ function updateStoreInfo() {
   let imgKb = 0;
   imageCache.forEach(v => { imgKb += v.length; });
   $('store-info').textContent =
-    `Версия ${APP_VERSION} от ${APP_BUILD_DATE} · ` +
+    `Версия ${APP_VERSION} от ${APP_BUILD_DATE} · хранилище: ` +
+    `${STORE_MODE === 'host' ? 'встроенное' : STORE_MODE === 'local' ? 'браузер' : STORE_MODE === 'idb' ? 'браузер (IndexedDB)' : 'только облако'} · ` +
     `сделки ${size(transactions)} КБ · каталог ${size(products)} КБ · ` +
     `имущество ${size(assets)} КБ · фото ${Math.round(imgKb / 1024)} КБ (${imageCache.size} шт.)`;
 }
@@ -5239,7 +5310,7 @@ $('app-version').title = 'Сборка от ' + APP_BUILD_DATE;
   await loadAll();
   applyProfileDefaultCategory();
   await loadAssets();
-  try { cloudOn = localStorage.getItem('flip-cloud-on') !== '0'; } catch (e) {}
+  cloudOn = readSmall('flip-cloud-on') !== '0';
   $('cloud-toggle').checked = cloudOn;
   checkEmptyWithMirror();
   await reconcileStores();
