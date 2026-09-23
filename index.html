@@ -136,6 +136,15 @@
   .sell-form { background: rgba(0,0,0,0.3); border-radius: 8px; padding: 10px; margin-top: 10px; }
   .sell-form label { color: rgba(255,255,255,0.6); }
   .sell-form input, .sell-form textarea { background: rgba(0,0,0,0.35); border-color: rgba(255,255,255,0.15); }
+  .sell-head { font-size: 12px; color: rgba(255,255,255,0.65); margin-bottom: 8px; }
+  .sell-row { border-top: 1px solid rgba(255,255,255,0.08); padding-top: 8px; margin-top: 8px; }
+  .sell-row:first-child { border-top: none; padding-top: 0; margin-top: 0; }
+  .sell-row-foot { display: flex; justify-content: space-between; align-items: center; min-height: 18px; }
+  .sell-row-foot .s-per { font-size: 11.5px; color: var(--muted); font-family: var(--mono); }
+  .sell-row-foot .s-del {
+    width: auto; background: none; border: none; color: var(--muted); font-size: 13px; padding: 0 4px;
+  }
+  .sell-row-foot .s-del:hover { color: var(--red); background: none; }
   .sell-preview { font-size: 12px; font-family: var(--mono); margin: 4px 0 8px; color: rgba(255,255,255,0.75); }
 
   .empty { color: var(--muted); font-size: 13px; text-align: center; padding: 24px 0; }
@@ -981,7 +990,7 @@
 </div>
 
 <script>
-const APP_VERSION = '3.4';
+const APP_VERSION = '3.5';
 const APP_BUILD_DATE = '04.09.26';
 const TX_KEY = 'flip-transactions-v3';
 const OLD_TX_KEY = 'flip-transactions-v2';
@@ -2796,21 +2805,15 @@ function openSellForm(cardEl, lotId) {
   const inv = inventory().find(x => x.lot.id === lotId);
   if (!inv) return;
   const { lot, remaining } = inv;
+  const unit = unitCost(lot);
 
   const f = document.createElement('div');
   f.className = 'sell-form';
   f.innerHTML = `
-    <div class="row">
-      <div>
-        <label>Цена продажи за шт.</label>
-        <input type="text" class="s-price" inputmode="numeric" placeholder="0" autocomplete="off">
-      </div>
-      <div>
-        <label>Количество (макс. ${remaining})</label>
-        <input type="number" class="s-qty" min="1" max="${remaining}" step="1" value="${remaining}">
-      </div>
-    </div>
-    <div class="row full">
+    <div class="sell-head">Продажа · на складе ${remaining} шт. по ${money(unit)}/шт</div>
+    <div class="sell-rows"></div>
+    <button type="button" class="cw-more s-add" style="margin-top:6px;">+ Ещё сделка</button>
+    <div class="row full" style="margin-top:10px;">
       <div>
         <label>Дата и время</label>
         <input type="datetime-local" class="s-date" value="${nowLocalISO()}">
@@ -2834,51 +2837,119 @@ function openSellForm(cardEl, lotId) {
     </div>`;
   cardEl.querySelector('.deal-body').appendChild(f);
 
-  const priceEl = f.querySelector('.s-price');
-  const qtyEl = f.querySelector('.s-qty');
+  const rowsEl = f.querySelector('.sell-rows');
   const prev = f.querySelector('.sell-preview');
-  attachMoneyInput(priceEl);
-  const upd = () => {
-    const p = moneyVal(priceEl);
-    const q = parseInt(qtyEl.value) || 0;
-    if (p > 0 && q > 0) {
-      const profit = (p - unitCost(lot)) * q;
-      prev.innerHTML = `Выручка ${money(p * q)} · закуп ${money(unitCost(lot) * q)} · чистыми <b class="${profit >= 0 ? 'pos' : 'neg'}" style="color:${profit >= 0 ? 'var(--green)' : 'var(--red)'}">${profit >= 0 ? '+' : '−'} ${money(profit)}</b>`;
-    } else prev.textContent = '';
-  };
-  priceEl.addEventListener('input', upd);
-  qtyEl.addEventListener('input', upd);
-  priceEl.focus();
+
+  function rowsData() {
+    return [...rowsEl.querySelectorAll('.sell-row')].map(r => ({
+      qty: parseInt(r.querySelector('.s-qty').value) || 0,
+      total: moneyVal(r.querySelector('.s-total')),
+      el: r
+    }));
+  }
+
+  function update() {
+    const rows = rowsData();
+    let qty = 0, revenue = 0;
+    rows.forEach(r => {
+      qty += r.qty;
+      revenue += r.total;
+      const per = r.el.querySelector('.s-per');
+      per.textContent = (r.qty > 0 && r.total > 0)
+        ? `${money(r.total / r.qty)}/шт` + (r.total / r.qty < unit ? ' · ниже закупа' : '')
+        : '';
+      per.style.color = (r.qty > 0 && r.total > 0 && r.total / r.qty < unit) ? 'var(--red)' : 'var(--muted)';
+    });
+
+    rowsEl.querySelectorAll('.s-del').forEach(b => b.classList.toggle('hidden', rows.length < 2));
+
+    if (!qty || !revenue) { prev.textContent = ''; return; }
+    const cost = unit * qty;
+    const profit = revenue - cost;
+    prev.innerHTML =
+      `${rows.length > 1 ? `${rows.length} сделки · ` : ''}${qty} шт. · выручка ${money(revenue)} · закуп ${money(cost)} · ` +
+      `чистыми <b style="color:${profit >= 0 ? 'var(--green)' : 'var(--red)'}">${profit >= 0 ? '+' : '−'} ${money(profit)}</b>` +
+      (qty > remaining ? `<br><span style="color:var(--red)">На складе только ${remaining} шт.</span>` : '');
+  }
+
+  function addRow(qty) {
+    const r = document.createElement('div');
+    r.className = 'sell-row';
+    r.innerHTML = `
+      <div class="row" style="margin-bottom:2px;">
+        <div>
+          <label>Количество</label>
+          <input type="number" class="s-qty" min="1" step="1" value="${qty || ''}">
+        </div>
+        <div>
+          <label>Сумма сделки</label>
+          <input type="text" class="s-total" inputmode="numeric" placeholder="0" autocomplete="off">
+        </div>
+      </div>
+      <div class="sell-row-foot">
+        <span class="s-per"></span>
+        <button type="button" class="s-del hidden" aria-label="Убрать">✕</button>
+      </div>`;
+    rowsEl.appendChild(r);
+    attachMoneyInput(r.querySelector('.s-total'));
+    r.querySelector('.s-qty').addEventListener('input', update);
+    r.querySelector('.s-total').addEventListener('input', update);
+    r.querySelector('.s-del').addEventListener('click', () => { r.remove(); update(); });
+    update();
+    return r;
+  }
+
+  const first = addRow(remaining);
+  first.querySelector('.s-total').focus();
+
+  f.querySelector('.s-add').addEventListener('click', () => {
+    const used = rowsData().reduce((s, r) => s + r.qty, 0);
+    const left = Math.max(1, remaining - used);
+    addRow(left).querySelector('.s-qty').focus();
+  });
 
   f.querySelector('.s-cancel').addEventListener('click', () => f.remove());
+
   f.querySelector('.s-save').addEventListener('click', async () => {
     const errEl = f.querySelector('.s-error');
-    const price = moneyVal(priceEl);
-    const qty = parseInt(qtyEl.value);
+    const rows = rowsData().filter(r => r.qty > 0 || r.total > 0);
     const date = f.querySelector('.s-date').value;
     const fail = m => { errEl.textContent = m; errEl.style.display = 'block'; };
-    if (!(price > 0)) return fail('Укажите цену продажи');
-    if (!(qty >= 1)) return fail('Количество должно быть не меньше 1');
-    if (qty > remaining) return fail(`На складе только ${remaining} шт.`);
+
+    if (!rows.length) return fail('Заполните хотя бы одну сделку');
+    for (const r of rows) {
+      if (!(r.qty >= 1)) return fail('Количество должно быть не меньше 1');
+      if (!(r.total > 0)) return fail('Укажите сумму сделки');
+    }
+    const totalQty = rows.reduce((s, r) => s + r.qty, 0);
+    if (totalQty > remaining) return fail(`На складе только ${remaining} шт., а указано ${totalQty}`);
     if (!date) return fail('Укажите дату');
     errEl.style.display = 'none';
 
-    transactions.push({
-      id: Date.now(),
-      profileId: profileOf(lot),
-      category: lot.category,
-      name: lot.name,
-      gender: lot.gender || null,
-      action: 'Продал',
-      price, qty,
-      total: price * qty,
-      perUnit: lot.perUnit || qty > 1,
-      date,
-      comment: f.querySelector('.s-comment').value.trim(),
-      cash: f.querySelector('.s-cash').checked,
-      lotId: lot.id,
-      costBasis: unitCost(lot) * qty
+    const comment = f.querySelector('.s-comment').value.trim();
+    const cash = f.querySelector('.s-cash').checked;
+    const base = Date.now();
+
+    rows.forEach((r, i) => {
+      transactions.push({
+        id: base + i,
+        profileId: profileOf(lot),
+        category: lot.category,
+        name: lot.name,
+        gender: lot.gender || null,
+        action: 'Продал',
+        price: r.total / r.qty,
+        qty: r.qty,
+        total: r.total,
+        perUnit: lot.perUnit || r.qty > 1,
+        date,
+        comment,
+        cash,
+        lotId: lot.id,
+        costBasis: unit * r.qty
+      });
     });
+
     await saveTx();
     renderAll();
   });
