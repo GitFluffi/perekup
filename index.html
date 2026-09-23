@@ -136,6 +136,17 @@
   .sell-form { background: rgba(0,0,0,0.3); border-radius: 8px; padding: 10px; margin-top: 10px; }
   .sell-form label { color: rgba(255,255,255,0.6); }
   .sell-form input, .sell-form textarea { background: rgba(0,0,0,0.35); border-color: rgba(255,255,255,0.15); }
+  .mini-add {
+    width: auto; background: none; border: 1px dashed var(--line); color: var(--muted);
+    font-size: 11.5px; font-weight: 500; padding: 5px 12px; border-radius: 999px; margin-top: 2px;
+  }
+  .mini-add:hover { border-color: var(--gold); color: var(--gold); background: none; }
+  .row-strip { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 4px 0 10px; }
+  .row-strip .rs-per { font-size: 11.5px; color: var(--muted); font-family: var(--mono); }
+  .rs-del {
+    width: auto; background: none; border: none; color: var(--muted); font-size: 13px; padding: 0 4px;
+  }
+  .rs-del:hover { color: var(--red); background: none; }
   .sell-head { font-size: 12px; color: rgba(255,255,255,0.65); margin-bottom: 8px; }
   .sell-row { border-top: 1px solid rgba(255,255,255,0.08); padding-top: 8px; margin-top: 8px; }
   .sell-row:first-child { border-top: none; padding-top: 0; margin-top: 0; }
@@ -572,6 +583,11 @@
         <input type="number" id="f-qty" min="1" step="1" value="1">
       </div>
     </div>
+    <div class="row-strip hidden" id="unit-strip">
+      <span class="rs-per" id="f-per"></span>
+      <button type="button" class="mini-add" id="add-deal-row">+ сделка</button>
+    </div>
+    <div id="extra-rows"></div>
 
     <div class="row full" id="wrap-extra">
       <div>
@@ -990,7 +1006,7 @@
 </div>
 
 <script>
-const APP_VERSION = '3.6';
+const APP_VERSION = '3.7';
 const APP_BUILD_DATE = '04.09.26';
 const TX_KEY = 'flip-transactions-v3';
 const OLD_TX_KEY = 'flip-transactions-v2';
@@ -2067,6 +2083,50 @@ catSelect.innerHTML = [...CATEGORIES, OTHER].map(c => `<option value="${c}">${c}
 catSelect.value = 'Предмет';
 $('f-date').value = nowLocalISO();
 
+function clearExtraRows() {
+  const box = $('extra-rows');
+  if (box) box.innerHTML = '';
+}
+
+function dealRows() {
+  const rows = [{ qty: parseInt($('f-qty').value) || 0, total: moneyVal($('f-price')) }];
+  document.querySelectorAll('#extra-rows .extra-row').forEach(r => {
+    rows.push({
+      qty: parseInt(r.querySelector('.er-qty').value) || 0,
+      total: moneyVal(r.querySelector('.er-total'))
+    });
+  });
+  return rows;
+}
+
+function addDealRow() {
+  const box = $('extra-rows');
+  const r = document.createElement('div');
+  r.className = 'extra-row';
+  r.innerHTML = `
+    <div class="row" style="margin-bottom:2px;">
+      <div>
+        <label>Сумма сделки</label>
+        <input type="text" class="er-total" inputmode="numeric" placeholder="0" autocomplete="off">
+      </div>
+      <div>
+        <label>Количество</label>
+        <input type="number" class="er-qty" min="1" step="1" value="1">
+      </div>
+    </div>
+    <div class="row-strip">
+      <span class="rs-per"></span>
+      <button type="button" class="rs-del" aria-label="Убрать">✕</button>
+    </div>`;
+  box.appendChild(r);
+  attachMoneyInput(r.querySelector('.er-total'));
+  r.querySelector('.er-total').addEventListener('input', updatePreview);
+  r.querySelector('.er-qty').addEventListener('input', updatePreview);
+  r.querySelector('.rs-del').addEventListener('click', () => { r.remove(); updatePreview(); });
+  r.querySelector('.er-total').focus();
+  updatePreview();
+}
+
 function applyCategoryUI() {
   const cat = catSelect.value;
   const isOther = cat === OTHER;
@@ -2074,7 +2134,9 @@ function applyCategoryUI() {
   $('wrap-product').classList.toggle('hidden', isOther);
   $('wrap-freename').classList.toggle('hidden', !isOther);
   $('wrap-unit').classList.toggle('hidden', !isItem);
+  $('unit-strip').classList.toggle('hidden', !isItem);
   $('wrap-amount').classList.toggle('hidden', isItem);
+  if (!isItem) clearExtraRows();
   updatePreview();
 }
 catSelect.addEventListener('change', () => {
@@ -2104,43 +2166,68 @@ function currentTotal() {
   return { total: a, price: a, qty: 1 };
 }
 function updatePreview() {
-  const { total, price, qty } = currentTotal();
   const action = $('f-action').value;
   const el = $('preview');
-  if (!(total > 0)) { el.textContent = ''; return; }
+  const isItem = catSelect.value === 'Предмет';
+
+  /* per-row hints */
+  if (isItem) {
+    const first = { qty: parseInt($('f-qty').value) || 0, total: moneyVal($('f-price')) };
+    $('f-per').textContent = (first.qty > 1 && first.total > 0) ? `${money(first.total / first.qty)}/шт` : '';
+    document.querySelectorAll('#extra-rows .extra-row').forEach(r => {
+      const q = parseInt(r.querySelector('.er-qty').value) || 0;
+      const t = moneyVal(r.querySelector('.er-total'));
+      r.querySelector('.rs-per').textContent = (q > 0 && t > 0) ? `${money(t / q)}/шт` : '';
+    });
+  }
+
+  const rows = isItem ? dealRows().filter(r => r.qty > 0 && r.total > 0) : null;
+  const { total, price, qty } = currentTotal();
+  const sumTotal = rows ? rows.reduce((s, r) => s + r.total, 0) : total;
+  const sumQty = rows ? rows.reduce((s, r) => s + r.qty, 0) : qty;
+  const many = rows && rows.length > 1;
+
+  if (!(sumTotal > 0)) { el.textContent = ''; return; }
+
   if (action === 'Купил') {
     const ex = moneyVal($('f-extra'));
-    const per = (total + ex) / (qty || 1);
-    el.innerHTML = ex
-      ? `На склад: ${money(total)} + доп. ${money(ex)} = <b>${money(total + ex)}</b> · ${money(per)}/шт`
-      : `На склад: ${money(total)}${qty > 1 ? ` · ${money(per)}/шт` : ''} (${qty} шт.)`;
+    const per = (sumTotal + ex) / (sumQty || 1);
+    el.innerHTML = (many ? `${rows.length} сделки · ` : '') +
+      (ex
+        ? `На склад: ${money(sumTotal)} + доп. ${money(ex)} = <b>${money(sumTotal + ex)}</b> · ${money(per)}/шт`
+        : `На склад: ${money(sumTotal)}${sumQty > 1 ? ` · ${money(per)}/шт` : ''} (${sumQty} шт.)`);
     return;
   }
+
   if (action === 'Продал') {
     const name = catSelect.value === OTHER ? $('f-freename').value.trim() : $('f-product').value.trim();
     const gender = selectedVariation ? selectedVariation.gender : null;
     const { plan, left, available } = name
-      ? planSale(catSelect.value, name, gender, qty)
-      : { plan: [], left: qty, available: 0 };
+      ? planSale(catSelect.value, name, gender, sumQty)
+      : { plan: [], left: sumQty, available: 0 };
 
     if (!plan.length) {
-      el.innerHTML = `Нет на складе — зачтётся целиком: <b class="pos">+ ${money(total)}</b>`;
+      el.innerHTML = (many ? `${rows.length} сделки · ` : '') +
+        `Нет на складе — зачтётся целиком: <b class="pos">+ ${money(sumTotal)}</b>`;
       return;
     }
     const cost = plan.reduce((s, x) => s + x.unit * x.qty, 0);
-    const sold = qty - left;
-    const revenue = total * (sold / (qty || 1));
+    const sold = sumQty - left;
+    const revenue = sumTotal * (sold / (sumQty || 1));
     const profit = revenue - cost;
-    el.innerHTML =
-      `${money(price)}/шт · закуп ${money(cost)}` +
+    el.innerHTML = (many ? `${rows.length} сделки · ` : '') +
+      `${money(sumTotal / (sumQty || 1))}/шт · закуп ${money(cost)}` +
       (plan.length > 1 ? ` (из ${plan.length} партий)` : '') +
       ` · чистыми: <b class="${profit >= 0 ? 'pos' : 'neg'}">${profit >= 0 ? '+' : '−'} ${money(profit)}</b>` +
       (left > 0 ? `<br><span style="color:var(--red)">На складе только ${available} шт. — остальное зачтётся без закупки</span>` : '');
     return;
   }
+
   const pos = action === 'Получил';
-  el.innerHTML = `Итог: <b class="${pos ? 'pos' : 'neg'}">${pos ? '+' : '−'} ${money(total)}</b>`;
+  el.innerHTML = `Итог: <b class="${pos ? 'pos' : 'neg'}">${pos ? '+' : '−'} ${money(sumTotal)}</b>`;
 }
+
+$('add-deal-row').addEventListener('click', addDealRow);
 attachMoneyInput($('f-amount'));
 attachMoneyInput($('f-price'));
 attachMoneyInput($('f-extra'));
@@ -2473,11 +2560,76 @@ $('add-form').addEventListener('submit', async e => {
   const { total, price, qty } = currentTotal();
   const fail = m => { errEl.textContent = m; errEl.style.display = 'block'; };
 
+  const rows = isItem ? dealRows().filter(r => r.qty > 0 || r.total > 0) : [{ qty, total }];
+
   if (!name) return fail(isOther ? 'Впишите название' : 'Выберите или впишите товар');
-  if (isItem && !(qty >= 1)) return fail('Количество должно быть не меньше 1');
-  if (!(total > 0)) return fail('Укажите сумму сделки');
+  if (isItem) {
+    if (!rows.length) return fail('Заполните сделку');
+    for (const r of rows) {
+      if (!(r.qty >= 1)) return fail('Количество должно быть не меньше 1');
+      if (!(r.total > 0)) return fail('Укажите сумму сделки');
+    }
+  } else if (!(total > 0)) return fail('Укажите сумму сделки');
   if (!date) return fail('Укажите дату сделки');
   errEl.style.display = 'none';
+
+  /* several deals entered at once — write each of them */
+  if (isItem && rows.length > 1 && !editingId) {
+    const base = Date.now();
+    const common = {
+      profileId: activeProfile,
+      category: cat, name,
+      gender: selectedVariation ? (selectedVariation.gender || null) : null,
+      image: null,
+      action,
+      perUnit: true,
+      date,
+      comment: $('f-comment').value.trim(),
+      cash: $('f-cash').checked
+    };
+
+    if (action === 'Продал') {
+      const left = new Map();
+      planSale(cat, name, common.gender, 1e9).plan.forEach(p => left.set(p.lot.id, { lot: p.lot, qty: p.qty, unit: p.unit }));
+      let seq = 0;
+      rows.forEach(r => {
+        let need = r.qty;
+        const per = r.total / r.qty;
+        for (const [id, part] of left) {
+          if (need <= 0) break;
+          if (part.qty <= 0) continue;
+          const take = Math.min(need, part.qty);
+          part.qty -= take;
+          need -= take;
+          transactions.push({ ...common, id: base + seq++, qty: take, price: per, total: per * take,
+                              lotId: id, costBasis: part.unit * take });
+        }
+        if (need > 0) {
+          transactions.push({ ...common, id: base + seq++, qty: need, price: per, total: per * need,
+                              lotId: null, costBasis: 0 });
+        }
+      });
+    } else {
+      const ex = action === 'Купил' ? moneyVal($('f-extra')) : 0;
+      rows.forEach((r, i) => {
+        transactions.push({
+          ...common,
+          id: base + i,
+          qty: r.qty,
+          price: r.total / r.qty,
+          total: r.total,
+          extras: (action === 'Купил' && ex && i === 0)
+            ? [{ id: base + 900 + i, name: 'Доп. расходы', amount: ex, auto: true }] : []
+        });
+      });
+    }
+
+    await saveTx();
+    resetForm();
+    applyProfileDefaultCategory();
+    renderAll();
+    return;
+  }
 
   const existingRec = editingId ? transactions.find(t => t.id === editingId) : null;
   if (!selectedVariation && !isOther) {
@@ -2581,6 +2733,7 @@ function resetForm() {
   $('f-amount').value = '';
   $('f-price').value = '';
   $('f-extra').value = '';
+  clearExtraRows();
   $('f-qty').value = '1';
   $('f-comment').value = '';
   $('f-cash').checked = false;
@@ -2869,7 +3022,9 @@ function openSellForm(cardEl, lotId) {
   f.innerHTML = `
     <div class="sell-head">Продажа · на складе ${remaining} шт. по ${money(unit)}/шт</div>
     <div class="sell-rows"></div>
-    <button type="button" class="cw-more s-add" style="margin-top:6px;">+ Ещё сделка</button>
+    <div style="display:flex; justify-content:flex-end;">
+      <button type="button" class="mini-add s-add">+ сделка</button>
+    </div>
     <div class="row full" style="margin-top:10px;">
       <div>
         <label>Дата и время</label>
