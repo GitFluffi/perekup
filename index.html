@@ -564,7 +564,7 @@
 
     <div class="row hidden" id="wrap-unit">
       <div>
-        <label>Цена за шт.</label>
+        <label>Сумма сделки</label>
         <input type="text" id="f-price" inputmode="numeric" placeholder="0" autocomplete="off">
       </div>
       <div>
@@ -990,7 +990,7 @@
 </div>
 
 <script>
-const APP_VERSION = '3.5';
+const APP_VERSION = '3.6';
 const APP_BUILD_DATE = '04.09.26';
 const TX_KEY = 'flip-transactions-v3';
 const OLD_TX_KEY = 'flip-transactions-v2';
@@ -2025,6 +2025,21 @@ function investedTotal() {
   return inventory().reduce((s, x) => s + x.remaining * unitCost(x.lot), 0);
 }
 /* pick oldest open lot matching name+category */
+/* a sale consumes open lots oldest-first and may span several of them */
+function planSale(category, name, gender, qty) {
+  const target = { category, name, gender: gender || null };
+  const lots = inventory().filter(x => sameItem(x.lot, target));
+  const plan = [];
+  let left = qty;
+  for (const x of lots) {
+    if (left <= 0) break;
+    const take = Math.min(left, x.remaining);
+    plan.push({ lot: x.lot, qty: take, unit: unitCost(x.lot) });
+    left -= take;
+  }
+  return { plan, left, available: lots.reduce((s, x) => s + x.remaining, 0) };
+}
+
 function findOpenLot(category, name, gender) {
   const target = { category, name, gender: gender || null };
   return inventory().find(x => sameItem(x.lot, target)) || null;
@@ -2081,9 +2096,9 @@ $('f-action').addEventListener('change', applyActionUI);
 
 function currentTotal() {
   if (catSelect.value === 'Предмет') {
-    const p = moneyVal($('f-price'));
+    const sum = moneyVal($('f-price'));
     const q = parseInt($('f-qty').value) || 0;
-    return { total: p * q, price: p, qty: q };
+    return { total: sum, price: q ? sum / q : sum, qty: q };
   }
   const a = moneyVal($('f-amount'));
   return { total: a, price: a, qty: 1 };
@@ -2095,21 +2110,32 @@ function updatePreview() {
   if (!(total > 0)) { el.textContent = ''; return; }
   if (action === 'Купил') {
     const ex = moneyVal($('f-extra'));
+    const per = (total + ex) / (qty || 1);
     el.innerHTML = ex
-      ? `На склад: ${money(total)} + доп. ${money(ex)} = <b>${money(total + ex)}</b> · ${money((total + ex) / (qty || 1))}/шт`
-      : `На склад: ${money(total)} (${qty} шт.)`;
+      ? `На склад: ${money(total)} + доп. ${money(ex)} = <b>${money(total + ex)}</b> · ${money(per)}/шт`
+      : `На склад: ${money(total)}${qty > 1 ? ` · ${money(per)}/шт` : ''} (${qty} шт.)`;
     return;
   }
   if (action === 'Продал') {
     const name = catSelect.value === OTHER ? $('f-freename').value.trim() : $('f-product').value.trim();
-    const lot = name ? findOpenLot(catSelect.value, name, selectedVariation ? selectedVariation.gender : null) : null;
-    if (lot) {
-      const take = Math.min(qty, lot.remaining);
-      const profit = price * take - unitCost(lot.lot) * take;
-      el.innerHTML = `Закуп ${money(unitCost(lot.lot))}/шт · чистыми: <b class="${profit >= 0 ? 'pos' : 'neg'}">${profit >= 0 ? '+' : '−'} ${money(profit)}</b>`;
-    } else {
+    const gender = selectedVariation ? selectedVariation.gender : null;
+    const { plan, left, available } = name
+      ? planSale(catSelect.value, name, gender, qty)
+      : { plan: [], left: qty, available: 0 };
+
+    if (!plan.length) {
       el.innerHTML = `Нет на складе — зачтётся целиком: <b class="pos">+ ${money(total)}</b>`;
+      return;
     }
+    const cost = plan.reduce((s, x) => s + x.unit * x.qty, 0);
+    const sold = qty - left;
+    const revenue = total * (sold / (qty || 1));
+    const profit = revenue - cost;
+    el.innerHTML =
+      `${money(price)}/шт · закуп ${money(cost)}` +
+      (plan.length > 1 ? ` (из ${plan.length} партий)` : '') +
+      ` · чистыми: <b class="${profit >= 0 ? 'pos' : 'neg'}">${profit >= 0 ? '+' : '−'} ${money(profit)}</b>` +
+      (left > 0 ? `<br><span style="color:var(--red)">На складе только ${available} шт. — остальное зачтётся без закупки</span>` : '');
     return;
   }
   const pos = action === 'Получил';
@@ -2476,14 +2502,45 @@ $('add-form').addEventListener('submit', async e => {
     const existing = editingId ? transactions.find(t => t.id === editingId) : null;
     if (existing && existing.lotId) {
       record.lotId = existing.lotId;
-      record.costBasis = existing.costBasis != null ? existing.costBasis : null;
       const lot = transactions.find(t => t.id === record.lotId);
-      if (lot) record.costBasis = unitCost(lot) * record.qty;
+      record.costBasis = lot ? unitCost(lot) * record.qty : (existing.costBasis || 0);
     } else {
-      const hit = findOpenLot(cat, name, record.gender);
-      if (hit) {
-        record.lotId = hit.lot.id;
-        record.costBasis = unitCost(hit.lot) * record.qty;
+      /* split the sale across open lots, oldest first */
+      const { plan, left } = planSale(cat, name, record.gender, record.qty);
+      if (plan.length > 1 || (plan.length === 1 && left > 0)) {
+        const perUnitPrice = record.total / record.qty;
+        const base = Date.now();
+        plan.forEach((part, i) => {
+          transactions.push({
+            ...record,
+            id: base + i,
+            qty: part.qty,
+            price: perUnitPrice,
+            total: perUnitPrice * part.qty,
+            lotId: part.lot.id,
+            costBasis: part.unit * part.qty
+          });
+        });
+        if (left > 0) {
+          transactions.push({
+            ...record,
+            id: base + plan.length,
+            qty: left,
+            price: perUnitPrice,
+            total: perUnitPrice * left,
+            lotId: null,
+            costBasis: 0
+          });
+        }
+        await saveTx();
+        resetForm();
+        applyProfileDefaultCategory();
+        renderAll();
+        return;
+      }
+      if (plan.length === 1) {
+        record.lotId = plan[0].lot.id;
+        record.costBasis = plan[0].unit * record.qty;
       } else {
         record.lotId = null;
         record.costBasis = 0;
@@ -2723,7 +2780,7 @@ function prefillBuy(entry, lot) {
   selectedVariation = entry;
   $('f-action').value = 'Купил';
   applyActionUI();
-  if (entry.category === 'Предмет') { setMoney($('f-price'), lot.price); $('f-qty').value = 1; }
+  if (entry.category === 'Предмет') { setMoney($('f-price'), Math.round(lot.price)); $('f-qty').value = 1; }
   else setMoney($('f-amount'), lot.price);
   $('f-extra').value = '';
   $('f-comment').value = '';
@@ -3067,7 +3124,7 @@ function fillForm(t) {
   else { fProduct.value = t.name; selectedVariation = { name: t.name, image: t.image, category: t.category, gender: t.gender || null }; }
   $('f-action').value = t.action;
   applyActionUI();
-  if (t.category === 'Предмет') { setMoney($('f-price'), t.price); $('f-qty').value = t.qty; }
+  if (t.category === 'Предмет') { setMoney($('f-price'), t.total); $('f-qty').value = t.qty; }
   else setMoney($('f-amount'), t.total);
   const autoEx = (t.extras || []).find(e => e.auto);
   setMoney($('f-extra'), autoEx ? autoEx.amount : '');
