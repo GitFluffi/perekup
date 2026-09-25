@@ -136,6 +136,20 @@
   .sell-form { background: rgba(0,0,0,0.3); border-radius: 8px; padding: 10px; margin-top: 10px; }
   .sell-form label { color: rgba(255,255,255,0.6); }
   .sell-form input, .sell-form textarea { background: rgba(0,0,0,0.35); border-color: rgba(255,255,255,0.15); }
+  .inv-sum {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    padding: 10px 12px; margin-bottom: 10px;
+  }
+  .inv-sum-title { font-size: 11px; color: var(--muted); margin-bottom: 7px; }
+  .inv-sum-row {
+    display: flex; align-items: baseline; gap: 10px; padding: 5px 0;
+    border-top: 1px solid var(--line); font-size: 12.5px;
+  }
+  .inv-sum-row:first-of-type { border-top: none; }
+  .inv-sum-row .isr-name { flex: 1; min-width: 0; }
+  .inv-sum-row .isr-qty { color: var(--muted); font-family: var(--mono); white-space: nowrap; }
+  .inv-sum-row .isr-avg { font-family: var(--mono); white-space: nowrap; color: var(--blue); }
+  .inv-sum-row .isr-sum { font-family: var(--mono); white-space: nowrap; color: var(--muted); }
   .mini-add {
     width: auto; background: none; border: 1px dashed var(--line); color: var(--muted);
     font-size: 11.5px; font-weight: 500; padding: 5px 12px; border-radius: 999px; margin-top: 2px;
@@ -632,6 +646,7 @@
     <select id="inv-cat"></select>
     <button type="button" class="inv-clear hidden" id="inv-clear" aria-label="Сбросить">✕</button>
   </div>
+  <div id="inv-summary"></div>
   <div class="listwrap" id="inventory-list"></div>
   <div class="empty" id="inventory-empty" style="display:none;">На складе пусто. Внесите покупку — товар появится здесь и будет ждать продажи.</div>
 </div>
@@ -1006,7 +1021,7 @@
 </div>
 
 <script>
-const APP_VERSION = '3.7';
+const APP_VERSION = '3.8';
 const APP_BUILD_DATE = '04.09.26';
 const TX_KEY = 'flip-transactions-v3';
 const OLD_TX_KEY = 'flip-transactions-v2';
@@ -2767,6 +2782,39 @@ function withScroll(el, fn) {
   window.scrollTo({ top: pageTop });
 }
 
+/* average cost of what is actually lying in stock, per item / colourway */
+function renderInvSummary(items, filtering) {
+  const box = $('inv-summary');
+  if (!box) return;
+  if (!filtering || !items.length) { box.innerHTML = ''; return; }
+
+  const by = new Map();
+  items.forEach(({ lot, remaining }) => {
+    const key = itemKey(lot) + '|' + lot.category;
+    if (!by.has(key)) by.set(key, { name: lot.name, gender: lot.gender || null, category: lot.category, qty: 0, sum: 0, lots: 0 });
+    const g = by.get(key);
+    g.qty += remaining;
+    g.sum += remaining * unitCost(lot);
+    g.lots += 1;
+  });
+
+  const rows = [...by.values()].sort((a, b) => b.sum - a.sum);
+  const totalQty = rows.reduce((s, r) => s + r.qty, 0);
+  const totalSum = rows.reduce((s, r) => s + r.sum, 0);
+
+  box.innerHTML = `
+    <div class="inv-sum">
+      <div class="inv-sum-title">Сейчас на складе${rows.length > 1 ? ` · ${rows.length} позиций · ${totalQty} шт. на ${money(totalSum)}` : ''}</div>
+      ${rows.map(r => `
+        <div class="inv-sum-row">
+          <span class="isr-name">${escapeHtml(r.name)}${genderBadge(r.gender)}${r.lots > 1 ? ` <span class="isr-qty">· ${r.lots} партии</span>` : ''}</span>
+          <span class="isr-qty">${r.qty} шт.</span>
+          <span class="isr-avg">${money(r.sum / r.qty)}/шт</span>
+          <span class="isr-sum">${money(r.sum)}</span>
+        </div>`).join('')}
+    </div>`;
+}
+
 function renderInventory() {
   const list = $('inventory-list');
   const empty = $('inventory-empty');
@@ -2790,6 +2838,8 @@ function renderInventory() {
   $('inventory-count').textContent = all.length
     ? (filtering ? `${items.length} из ${all.length} · ${money(invested)}` : `${all.length} позиций`)
     : '';
+
+  renderInvSummary(items, filtering);
 
   if (!items.length) {
     empty.style.display = 'block';
