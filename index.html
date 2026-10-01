@@ -987,6 +987,7 @@
     <div class="file-row">
       <input type="file" accept="image/*" id="a-file" class="hidden">
       <img class="thumb-preview" id="a-thumb" style="display:none;">
+      <button type="button" class="quick-btn hidden" id="a-rmimg" style="background:var(--panel);color:var(--muted);">Убрать фото</button>
     </div>
     <div class="row full">
       <div>
@@ -1021,7 +1022,7 @@
 </div>
 
 <script>
-const APP_VERSION = '3.9';
+const APP_VERSION = '4.0';
 const APP_BUILD_DATE = '04.09.26';
 const TX_KEY = 'flip-transactions-v3';
 const OLD_TX_KEY = 'flip-transactions-v2';
@@ -2571,7 +2572,7 @@ $('add-form').addEventListener('submit', async e => {
   const isItem = cat === 'Предмет';
   const name = isOther ? $('f-freename').value.trim() : fProduct.value.trim();
   const action = $('f-action').value;
-  const date = $('f-date').value;
+  const date = editingId ? $('f-date').value : freshDate();
   const { total, price, qty } = currentTotal();
   const fail = m => { errEl.textContent = m; errEl.style.display = 'block'; };
 
@@ -2741,6 +2742,7 @@ function applyProfileDefaultCategory() {
 
 function resetForm() {
   editingId = null;
+  dateTouched = false;
   pendingRevert = null;
   selectedVariation = null;
   fProduct.value = '';
@@ -2761,6 +2763,18 @@ function resetForm() {
   $('cancel-edit').classList.add('hidden');
 }
 $('cancel-edit').addEventListener('click', resetForm);
+
+/* the form may sit open for hours — keep the timestamp fresh unless it was edited by hand */
+let dateTouched = false;
+$('f-date').addEventListener('input', () => { dateTouched = true; });
+function freshDate() {
+  if (!dateTouched) $('f-date').value = nowLocalISO();
+  return $('f-date').value;
+}
+['f-price', 'f-amount', 'f-qty', 'f-product', 'f-freename'].forEach(id => {
+  const el = $(id);
+  if (el) el.addEventListener('focus', () => { if (!dateTouched) $('f-date').value = nowLocalISO(); });
+});
 
 /* ---------- inventory list ---------- */
 const invCatSel = $('inv-cat');
@@ -3111,6 +3125,9 @@ function openSellForm(cardEl, lotId) {
 
   const rowsEl = f.querySelector('.sell-rows');
   const prev = f.querySelector('.sell-preview');
+  const dateEl = f.querySelector('.s-date');
+  let sellDateTouched = false;
+  dateEl.addEventListener('input', () => { sellDateTouched = true; });
 
   function rowsData() {
     return [...rowsEl.querySelectorAll('.sell-row')].map(r => ({
@@ -3185,7 +3202,8 @@ function openSellForm(cardEl, lotId) {
   f.querySelector('.s-save').addEventListener('click', async () => {
     const errEl = f.querySelector('.s-error');
     const rows = rowsData().filter(r => r.qty > 0 || r.total > 0);
-    const date = f.querySelector('.s-date').value;
+    if (!sellDateTouched) dateEl.value = nowLocalISO();
+    const date = dateEl.value;
     const fail = m => { errEl.textContent = m; errEl.style.display = 'block'; };
 
     if (!rows.length) return fail('Заполните хотя бы одну сделку');
@@ -3355,6 +3373,7 @@ function startEdit(id) {
   editingId = id;
   fillForm(t);
   $('f-date').value = t.date;
+  dateTouched = true;
   $('submit-btn').textContent = 'Сохранить изменения';
   $('form-mode-title').textContent = 'Редактирование сделки';
   $('cancel-edit').classList.remove('hidden');
@@ -3905,12 +3924,18 @@ $('new-product-form').addEventListener('submit', async e => {
   const name = $('np-variation').value.trim();
   const cat = npCategory.value;
   if (!name) { errEl.textContent = hasColorways(cat) ? vw(cat).need : 'Введите название товара'; errEl.style.display = 'block'; return; }
+  const npGender = hasGender(cat) ? ($('np-gender').value || null) : null;
+  if (productExists(cat, name, npGender)) {
+    errEl.textContent = 'Товар с таким названием уже есть в каталоге';
+    errEl.style.display = 'block';
+    return;
+  }
   errEl.style.display = 'none';
   const id = Date.now();
   const npImgId = await putImage(npPendingImage);
   products.push({
     id, category: cat, name, image: null, imgId: npImgId,
-    gender: hasGender(cat) ? ($('np-gender').value || null) : null,
+    gender: npGender,
     colorways: hasColorways(cat) ? [{ id: id + 1, name, image: null, imgId: npImgId }] : []
   });
   await saveProducts();
@@ -4317,6 +4342,13 @@ function openColorwayForm(productId, colorwayId) {
     const errEl = f.querySelector('.v-error');
     const name = f.querySelector('.v-name-input').value.trim();
     if (!name) { errEl.textContent = w.nameLabel; errEl.style.display = 'block'; return; }
+    const clash = (product.colorways || []).some(c =>
+      c !== cwItem && c.name.trim().toLowerCase() === name.toLowerCase());
+    if (clash || (!cwItem && productExists(product.category, name, product.gender || null))) {
+      errEl.textContent = 'Такое название уже есть в каталоге';
+      errEl.style.display = 'block';
+      return;
+    }
     errEl.style.display = 'none';
     if (!product.colorways) product.colorways = [];
     let cwImgId = null;
@@ -4533,14 +4565,52 @@ $('cat-import-file').addEventListener('change', async () => {
     if (!confirm('Точно заменить весь каталог? Текущие товары будут удалены. Сделки останутся.')) return;
     products = incoming.products;
   } else {
-    let added = 0, skipped = 0;
+    let added = 0, merged = 0, skipped = 0;
     incoming.products.forEach(p => {
       const gender = p.gender || null;
-      if (productExists(p.category, p.name, gender)) { skipped++; return; }
-      products.push({ ...p, id: Date.now() + Math.floor(Math.random() * 100000) });
+      const cw = hasColorways(p.category);
+
+      /* an existing card with the same name takes only the colourways it lacks */
+      const twin = products.find(x => x.category === p.category &&
+        (x.gender || null) === gender &&
+        x.name.trim().toLowerCase() === String(p.name).trim().toLowerCase());
+
+      if (twin) {
+        if (!cw) { skipped++; return; }
+        const have = new Set((twin.colorways || []).map(c => c.name.trim().toLowerCase()));
+        let addedHere = 0;
+        (p.colorways || []).forEach(c => {
+          const key = String(c.name).trim().toLowerCase();
+          if (have.has(key)) return;
+          if (productExists(p.category, c.name, gender)) return;
+          twin.colorways = twin.colorways || [];
+          twin.colorways.push({ id: Date.now() + Math.floor(Math.random() * 1e6), name: c.name, image: c.image || null, imgId: c.imgId || null });
+          have.add(key);
+          addedHere++;
+        });
+        if (addedHere) { merged += addedHere; } else { skipped++; }
+        return;
+      }
+
+      if (!cw) {
+        if (productExists(p.category, p.name, gender)) { skipped++; return; }
+        products.push({ ...p, id: Date.now() + Math.floor(Math.random() * 1e6) });
+        added++;
+        return;
+      }
+
+      /* new card: drop colourways that already exist elsewhere in this category */
+      const fresh = (p.colorways || []).filter(c => !productExists(p.category, c.name, gender));
+      if (!fresh.length) { skipped++; return; }
+      products.push({ ...p, id: Date.now() + Math.floor(Math.random() * 1e6), colorways: fresh });
       added++;
+      merged += 0;
+      skipped += (p.colorways || []).length - fresh.length;
     });
-    showBanner(`Добавлено товаров: ${added}${skipped ? `, пропущено дубликатов: ${skipped}` : ''}.`, true);
+    showBanner(
+      `Добавлено товаров: ${added}` +
+      (merged ? `, добавлено к существующим: ${merged}` : '') +
+      (skipped ? `, пропущено дубликатов: ${skipped}` : '') + '.', true);
   }
 
   migrateProducts();
@@ -4908,6 +4978,7 @@ function renderAPicked() {
     e.stopPropagation();
     aName.value = '';
     aSelected = null;
+    setAssetPhoto(null);
     aName.classList.remove('hidden');
     box.innerHTML = '';
     aName.focus();
@@ -4943,7 +5014,11 @@ function renderAAc(matches) {
     item.addEventListener('mousedown', ev => {
       ev.preventDefault();
       const v = view.find(m => String(m.id) === item.dataset.id);
-      if (v) { aName.value = v.name; aSelected = v; }
+      if (v) {
+        aName.value = v.name;
+        aSelected = v;
+        setAssetPhoto(v.image || findImageByName(v.category, v.name, v.gender) || null);
+      }
       aAcList.style.display = 'none';
       renderAPicked();
     });
@@ -4957,7 +5032,7 @@ function renderAAc(matches) {
       aCategory.value = entry.category;
       aName.value = entry.name;
       aSelected = entry;
-      if (entry.image) { aPendingImage = entry.image; $('a-thumb').src = entry.image; $('a-thumb').style.display = 'block'; }
+      setAssetPhoto(entry.image || null);
       renderAPicked();
     });
   });
@@ -5016,12 +5091,24 @@ function updateAssetPreview() {
 }
 ['a-price','a-value','a-qty'].forEach(id => $(id).addEventListener('input', updateAssetPreview));
 
-attachImageInput($('a-zone'), $('a-file'), data => {
-  aPendingImage = data;
-  $('a-thumb').src = data;
-  $('a-thumb').style.display = 'block';
-  $('a-zone').textContent = 'Фото добавлено — вставьте другое, чтобы заменить';
-});
+function setAssetPhoto(data) {
+  aPendingImage = data || null;
+  const thumb = $('a-thumb');
+  if (data) {
+    thumb.src = data;
+    thumb.style.display = 'block';
+    $('a-zone').textContent = 'Фото добавлено — вставьте другое, чтобы заменить';
+  } else {
+    thumb.removeAttribute('src');
+    thumb.style.display = 'none';
+    $('a-file').value = '';
+    $('a-zone').innerHTML = 'Вставьте <b>Ctrl+V</b>, перетащите файл или нажмите для выбора';
+  }
+  $('a-rmimg').classList.toggle('hidden', !data);
+}
+
+attachImageInput($('a-zone'), $('a-file'), data => setAssetPhoto(data));
+$('a-rmimg').addEventListener('click', () => setAssetPhoto(null));
 
 function resetAssetForm() {
   editingAssetId = null;
@@ -5033,9 +5120,7 @@ function resetAssetForm() {
   $('a-value').value = '';
   $('a-qty').value = '1';
   $('a-comment').value = '';
-  $('a-file').value = '';
-  $('a-thumb').style.display = 'none';
-  $('a-zone').innerHTML = 'Вставьте <b>Ctrl+V</b>, перетащите файл или нажмите для выбора';
+  setAssetPhoto(null);
   $('a-preview').textContent = '';
   $('a-error').style.display = 'none';
   $('a-submit').textContent = '+ Добавить';
@@ -5075,7 +5160,6 @@ $('asset-form').addEventListener('submit', async e => {
   if (editingAssetId) {
     const i = assets.findIndex(a => a.id === editingAssetId);
     if (i >= 0) {
-      if (aPendingImage === null) { rec.imgId = assets[i].imgId || null; rec.image = assets[i].image || null; }
       rec.upgrades = assets[i].upgrades || [];
       assets[i] = rec;
     }
@@ -5275,9 +5359,7 @@ function startAssetEdit(id) {
   setMoney($('a-value'), a.value !== undefined ? a.value : a.price);
   $('a-qty').value = a.qty;
   $('a-comment').value = a.comment || '';
-  aPendingImage = imgOfNamed(a);
-  if (aPendingImage) { $('a-thumb').src = aPendingImage; $('a-thumb').style.display = 'block'; }
-  else $('a-thumb').style.display = 'none';
+  setAssetPhoto(imgOfNamed(a));
   $('a-submit').textContent = 'Сохранить изменения';
   $('asset-form-title').textContent = 'Редактирование';
   $('a-cancel').classList.remove('hidden');
