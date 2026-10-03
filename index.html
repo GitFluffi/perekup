@@ -1028,7 +1028,7 @@
 </div>
 
 <script>
-const APP_VERSION = '4.3';
+const APP_VERSION = '4.4';
 const APP_BUILD_DATE = '04.09.26';
 const TX_KEY = 'flip-transactions-v3';
 const OLD_TX_KEY = 'flip-transactions-v2';
@@ -1437,6 +1437,7 @@ function allowEmpty(key) { intentionalEmpty.add(key); }
 const COUNTED_KEYS = ['flip-transactions-v3', 'flip-products', 'flip-assets'];
 const intentionalShrink = new Set();
 function allowShrink(key) { intentionalShrink.add(key); }
+let pulledOk = false;   // set once this device has seen the current cloud state
 function countOf(value) {
   if (Array.isArray(value)) return value.length;
   if (value && Array.isArray(value.products)) return value.products.length;
@@ -1448,6 +1449,9 @@ function countOf(value) {
 async function wouldShrink(key, value) {
   if (!COUNTED_KEYS.includes(key)) return false;
   if (intentionalShrink.has(key)) return false;
+  /* the only real danger is a device that never saw the current cloud state;
+     once it has, fewer records simply means the user removed or moved something */
+  if (pulledOk) return false;
   const mine = countOf(value);
   if (mine === null) return false;
   try {
@@ -1533,6 +1537,7 @@ async function pullFromCloud(silent, force) {
     const stale = SYNCED_KEYS.filter(k => meta[k] && (force || cloudSeen[k] !== meta[k]));
 
     if (!stale.length) {
+      pulledOk = true;
       lastPullAt = Date.now();
       cloudState = 'ok';
       cloudMsg = 'синхронизировано ' + new Date().toLocaleTimeString('ru-RU').slice(0, 5);
@@ -1572,6 +1577,7 @@ async function pullFromCloud(silent, force) {
       renderAll(); renderProducts(); renderAssets();
       if (!silent) showBanner('Данные обновлены из облака.', true);
     }
+    pulledOk = true;
     lastPullAt = Date.now();
     cloudState = 'ok';
     cloudMsg = 'синхронизировано ' + new Date().toLocaleTimeString('ru-RU').slice(0, 5);
@@ -5726,6 +5732,7 @@ $('btn-cloud-pull').addEventListener('click', async () => {
     if (!confirm('Заменить данные на этом устройстве тем, что лежит в облаке?')) return;
   }
   await pullFromCloud(false, true);
+  if (pulledOk) bootSyncing = false;
 });
 
 /* ---------- backup ---------- */
@@ -5817,7 +5824,13 @@ $('app-version').title = 'Сборка от ' + APP_BUILD_DATE;
   }
   if (cloudOn) {
     await pullFromCloud(true, true);
-    bootSyncing = false;
+    if (!pulledOk) {
+      showBanner(
+        'Не удалось получить данные из облака, поэтому изменения с этого устройства пока не отправляются — ' +
+        'чтобы не затереть то, что там лежит. Проверьте интернет и нажмите «Загрузить из облака» в «Настройках».'
+      );
+    }
+    bootSyncing = !pulledOk;
     /* first run on a fresh device: seed the cloud with whatever is here */
     if (!transactions.length && !products.length && !assets.length) renderCloudStatus();
     setInterval(() => { if (cloudOn && !document.hidden) pullFromCloud(true); }, 5 * 60000);
