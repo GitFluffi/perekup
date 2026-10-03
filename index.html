@@ -1028,7 +1028,7 @@
 </div>
 
 <script>
-const APP_VERSION = '4.1';
+const APP_VERSION = '4.2';
 const APP_BUILD_DATE = '04.09.26';
 const TX_KEY = 'flip-transactions-v3';
 const OLD_TX_KEY = 'flip-transactions-v2';
@@ -1413,7 +1413,10 @@ function cloudApply(key, value) {
   }
 }
 
+let bootSyncing = true;   // until the first pull lands, this device must not write to the cloud
+
 function markCloudDirty(key) {
+  if (bootSyncing) return;
   if (!cloudOn || !cloudSpace || !SYNCED_KEYS.includes(key)) return;
   cloudPending.add(key);
   clearTimeout(cloudTimer);
@@ -1431,6 +1434,37 @@ function isEmptyPayload(key, value) {
 const intentionalEmpty = new Set();
 function allowEmpty(key) { intentionalEmpty.add(key); }
 
+const COUNTED_KEYS = ['flip-transactions-v3', 'flip-products', 'flip-assets'];
+function countOf(value) {
+  if (Array.isArray(value)) return value.length;
+  if (value && Array.isArray(value.products)) return value.products.length;
+  if (value && Array.isArray(value.assets)) return value.assets.length;
+  return null;
+}
+
+/* a device holding an old snapshot must not quietly overwrite a fuller cloud */
+async function wouldShrink(key, value) {
+  if (!COUNTED_KEYS.includes(key)) return false;
+  const mine = countOf(value);
+  if (mine === null) return false;
+  try {
+    const res = await fetch(
+      `${CLOUD_URL}/rest/v1/${CLOUD_TABLE}?space=eq.${encodeURIComponent(cloudSpace)}&key=eq.${encodeURIComponent(key)}&select=value`,
+      { headers: cloudReadHeaders() });
+    if (!res.ok) return false;
+    const rows = await res.json();
+    if (!rows.length) return false;
+    const theirs = countOf(rows[0].value);
+    if (theirs === null) return false;
+    if (mine >= theirs) return false;
+    const label = key === 'flip-transactions-v3' ? 'сделок' : key === 'flip-products' ? 'товаров' : 'позиций имущества';
+    return !confirm(
+      `В облаке ${theirs} ${label}, а на этом устройстве ${mine}.\n\n` +
+      `Отправить и затереть облако?\n` +
+      `Отмена — оставить облако как есть (нажмите «Загрузить из облака», чтобы получить полные данные).`);
+  } catch (e) { return false; }
+}
+
 /* refuse to blank out data that already exists in the cloud */
 async function wouldWipe(key, value) {
   if (!isEmptyPayload(key, value)) return false;
@@ -1447,7 +1481,7 @@ async function wouldWipe(key, value) {
 }
 
 async function flushCloud() {
-  if (!cloudOn || !cloudSpace || !cloudPending.size) return;
+  if (bootSyncing || !cloudOn || !cloudSpace || !cloudPending.size) return;
   const keys = [...cloudPending];
   cloudPending.clear();
   cloudState = 'syncing';
@@ -1460,6 +1494,7 @@ async function flushCloud() {
     for (const key of keys) {
       const value = cloudValueFor(key);
       if (await wouldWipe(key, value)) { blocked++; continue; }
+      if (await wouldShrink(key, value)) { blocked++; continue; }
       await cloudPush(key, value);
       intentionalEmpty.delete(key);
       delete cloudSeen[key];   // refreshed by the next cheap poll
@@ -5768,7 +5803,8 @@ $('app-version').title = 'Сборка от ' + APP_BUILD_DATE;
     openSpaceDialog(true);
   }
   if (cloudOn) {
-    await pullFromCloud(true);
+    await pullFromCloud(true, true);
+    bootSyncing = false;
     /* first run on a fresh device: seed the cloud with whatever is here */
     if (!transactions.length && !products.length && !assets.length) renderCloudStatus();
     setInterval(() => { if (cloudOn && !document.hidden) pullFromCloud(true); }, 5 * 60000);
@@ -5777,6 +5813,7 @@ $('app-version').title = 'Сборка от ' + APP_BUILD_DATE;
     });
     window.addEventListener('beforeunload', () => { if (cloudPending.size) flushCloud(); });
   }
+  bootSyncing = false;
   renderCloudStatus();
   updateStoreInfo();
 
